@@ -10,7 +10,7 @@
     <ul class="topnavbar">
 
         <li class="topnavitem">
-            <a id="txt" href="#controlGAN">Projects</a>
+            <a id="txt" href="#project-grid">Projects</a>
         </li>
 
         <li class="topnavitem">
@@ -31,242 +31,23 @@
     </header>
 
 
-    <button class="filter-btn" data-category="cat1">Category 1</button>
-    <button class="filter-btn" data-category="cat2">Category 2</button>
-    <button class="filter-btn" data-category="cat3">Category 3</button>
+    <button class="filter-btn" data-category="architecture">Architecture</button>
+    <button class="filter-btn" data-category="ai">AI &amp; image</button>
+    <button class="filter-btn" data-category="teaching">Teaching</button>
+    <button class="filter-btn" data-category="grasshopper">Grasshopper</button>
 
 
-    <div class="wrapper2">
+    <!-- Project cards are generated from projects.json by assets/js/JavaScript.js -->
+    <div class="wrapper2" id="project-grid"></div>
 
+    <!-- Modal containers are generated alongside the cards, one per project -->
+    <div id="modal-root"></div>
 
-        
-        <div class="open-modal-button modal-button" data-modal-target="#myModal19" href="#myModal19" id="portfolio">
-
-            <p href="#myModal19">Architecture portfolio</p>
-
-        </div>
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal18" href="#myModal18" id="controlGAN">
-
-            <p href="#myModal18">Generative AI (Python): controlGAN</p>
-
-        </div>
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal17" href="#myModal17" id="glitchGAN">
-
-            <p href="#myModal17">Generative AI (Python): audioreactive glitchGAN</p>
-
-        </div>
-
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal16" href="#myModal16" id="midjourney">
-
-            <p href="#myModal16">Midjourney and runwayML: imagine churches</p>
-
-        </div>
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal15" href="#myModal15" id="imageprocessing">
-
-            <p href="#myModal15">Python: data to geometries with image processing</p>
-
-        </div>
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal13" href="#myModal13" id="pythoncourse">
-
-            <p href="#myModal13">Course: programming and data science with Python</p>
-
-        </div>
-
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal5" href="#myModal5" id="tutorials">
-
-            <p href="#myModal5">Course: programming with Grasshopper</p>
-
-        </div>
-
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal12" href="#myModal12" id="p5js">
-
-            <p href="#myModal12">Course: programming with JavaScript</p>
-
-        </div>
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal14" href="#myModal4" id="forloops">
-
-            <p href="#myModal4">Python: visualizing 'for loops'</p>
-
-        </div>
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal20" href="#myModal20" id="booklet">
-
-            <p href="#myModal20">Co-editing: architecture book "The workshop"</p>
-
-        </div>
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal10" href="#myModal10" id="website">
-
-            <p href="#myModal10">HTML/CSS/Javascript: website</p>
-
-        </div>
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal9" href="#myModal9" id="make2d">
-            <p href="#myModal9">Grasshopper: from 3D model to 2D DWG file</p>
-        </div>
-
-
-
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal1" href="#myModal1" id="hautepierre">
-            <p href="#myModal1">Grasshopper to Revit: Complex geometries</p>
-        </div>
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal3" href="#myModal3" id="lely">
-            <p href="#myModal3">Grasshopper: radiation and lux analysis to diagrams</p>
-        </div>
-
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal11" href="#myModal11" id="ward">
-            <p href="#myModal11">Grasshopper: simulation of bacterial growth
-        </div>
-
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal7" href="#myModal7" id="firefly">
-            <p href="#myModal7">Grasshopper: sound reacting shapes</p>
-        </div>
-
-
-
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal6" href="#myModal6" id="pixelsort">
-
-            <p href="#myModal6">Grasshopper: pixelSorting</p>
-
-        </div>
-
-
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal8" href="#myModal8" id="dimensions">
-
-            <p href="#myModal8">Grasshopper: quick dimension script</p>
-
-        </div>
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal2" href="#myModal2" id="griddisto">
-
-            <p href="#myModal2"> Grasshopper: grid distortion on radiation hotspots</p>
-
-        </div>
-
-        <div class="open-modal-button modal-button" data-modal-target="#myModal4" href="#myModal4" id="radiation">
-
-            <p href="#myModal4">Grasshopper: quick radiation analysis</p>
-
-        </div>
-
-
-    </div>
-
-
-     <!-- booklet -->
-
-    <div id="myModal20" class="modal">
-    </div>
-
-     <!-- portfolio -->
-
-    <div id="myModal19" class="modal">
-    </div>
-
-    <!-- controlGAN -->
-    <div id="myModal18" class="modal">
-    </div>
-
-    <!-- glitchGAN -->
-    <div id="myModal17" class="modal">
-    </div>
-
-    <!-- Hautepierre -->
-    <div id="myModal1" class="modal">
-    </div>
-
-
-    <!-- Disortion -->
-    <div id="myModal2" class="modal">
-    </div>
-
-
-    <!-- Lelystad -->
-    <div id="myModal3" class="modal">
-    </div>
-
-
-    <!-- Quick Radiation analysis -->
-    <div id="myModal4" class="modal">
-    </div>
-
-
-    <!-- Tutorials -->
-    <div id="myModal5" class="modal">
-    </div>
-
-
-    <!-- PixelSort -->
-    <div id="myModal6" class="modal">
-    </div>
-
-
-    <!-- FireFly -->
-    <div id="myModal7" class="modal">
-    </div>
-
-
-    <!-- Dimensions -->
-    <div id="myModal8" class="modal">
-
-    </div>
-
-
-    <!-- Make2D -->
-    <div id="myModal9" class="modal">
-
-
-    </div>
-
-    <!-- Website -->
-    <div id="myModal10" class="modal">
-    </div>
-
-
-    <!-- Ward: BacteriaSimulation -->
-    <div id="myModal11" class="modal">
-    </div>
-
-
-    <!-- Education: p5js -->
-    <div id="myModal12" class="modal">
-    </div>
-
-    <!-- Full python course -->
-    <div id="myModal13" class="modal">
-    </div>
-
-    <!-- python: Forloops -->
-    <div id="myModal14" class="modal">
-    </div>
-
-    <!-- image processing -->
-    <div id="myModal15" class="modal">
-    </div>
-
-    <!-- midjourney -->
-    <div id="myModal16" class="modal">
-    </div>
-
-<script src="JavaScript.js" defer></script>
+<script src="assets/js/JavaScript.js" defer></script>
 </body>
 
 <footer id="About">
-    <img src="me.png">
+    <img src="assets/images/me.png">
 
     <h1 > About me </h1>
     <p> I received my Master's degree in Architecture at TU Delft in 2018. This sparked my fascination in the use and development of computational tools for architects and designers. </p>
@@ -283,7 +64,7 @@
 
 </footer>
 <!-- 
-<script src="JavaScript.js"></script> -->
-<link href="StyleSheet.css" rel="stylesheet" />
+<script src="assets/js/JavaScript.js"></script> -->
+<link href="assets/css/StyleSheet.css" rel="stylesheet" />
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 </html>

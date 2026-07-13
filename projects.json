@@ -1,0 +1,122 @@
+[
+  {
+    "id": "portfolio",
+    "title": "Architecture portfolio",
+    "thumb": "assets/projects/Portfolio/cover.png",
+    "category": "architecture"
+  },
+  {
+    "id": "controlGAN",
+    "title": "Generative AI (Python): controlGAN",
+    "thumb": "assets/projects/ControlGAN/Facade.png",
+    "category": "ai"
+  },
+  {
+    "id": "glitchGAN",
+    "title": "Generative AI (Python): audioreactive glitchGAN",
+    "thumb": "assets/projects/GlitchGAN/cover.png",
+    "category": "ai"
+  },
+  {
+    "id": "midjourney",
+    "title": "Midjourney and runwayML: imagine churches",
+    "thumb": "assets/projects/GANapplication/Church.png",
+    "category": "ai"
+  },
+  {
+    "id": "imageprocessing",
+    "title": "Python: data to geometries with image processing",
+    "thumb": "assets/projects/ImageProcessing/Picture.png",
+    "category": "ai"
+  },
+  {
+    "id": "pythoncourse",
+    "title": "Course: programming and data science with Python",
+    "thumb": "assets/projects/PythonCourse/OverallViewsmall.jpg",
+    "category": "teaching"
+  },
+  {
+    "id": "tutorials",
+    "title": "Course: programming with Grasshopper",
+    "thumb": "assets/projects/Tutorials/Basic2small.jpg",
+    "category": "teaching"
+  },
+  {
+    "id": "p5js",
+    "title": "Course: programming with JavaScript",
+    "thumb": "assets/projects/P5js/Coversmall.jpg",
+    "category": "teaching"
+  },
+  {
+    "id": "forloops",
+    "title": "Python: visualizing 'for loops'",
+    "thumb": "assets/projects/Forloops/Picture.png",
+    "category": "teaching"
+  },
+  {
+    "id": "booklet",
+    "title": "Co-editing: architecture book \"The workshop\"",
+    "thumb": "assets/projects/Booklet/cover.png",
+    "category": "architecture"
+  },
+  {
+    "id": "website",
+    "title": "HTML/CSS/Javascript: website",
+    "thumb": "assets/projects/Website/Picturesmall.jpg",
+    "category": "grasshopper"
+  },
+  {
+    "id": "make2d",
+    "title": "Grasshopper: from 3D model to 2D DWG file",
+    "thumb": "assets/projects/Make2D/Picturesmall.jpg",
+    "category": "grasshopper"
+  },
+  {
+    "id": "hautepierre",
+    "title": "Grasshopper to Revit: Complex geometries",
+    "thumb": "assets/projects/Hautepierre/render2small.jpg",
+    "category": "architecture"
+  },
+  {
+    "id": "lely",
+    "title": "Grasshopper: radiation and lux analysis to diagrams",
+    "thumb": "assets/projects/Lely/Picturesmall.jpg",
+    "category": "architecture"
+  },
+  {
+    "id": "ward",
+    "title": "Grasshopper: simulation of bacterial growth",
+    "thumb": "assets/projects/Ward/Picturesmall.jpg",
+    "category": "architecture"
+  },
+  {
+    "id": "firefly",
+    "title": "Grasshopper: sound reacting shapes",
+    "thumb": "assets/projects/FireFly/Picturesmall.jpg",
+    "category": "grasshopper"
+  },
+  {
+    "id": "pixelsort",
+    "title": "Grasshopper: pixelSorting",
+    "thumb": "assets/projects/PixelSort/Picturesmall.jpg",
+    "category": "grasshopper"
+  },
+  {
+    "id": "dimensions",
+    "title": "Grasshopper: quick dimension script",
+    "thumb": "assets/projects/Dimensions/Picturesmall.jpg",
+    "category": "grasshopper"
+  },
+  {
+    "id": "griddisto",
+    "title": "Grasshopper: grid distortion on radiation hotspots",
+    "thumb": "assets/projects/GridDisto/RENDERGOEDsmall.jpg",
+    "category": "grasshopper"
+  },
+  {
+    "id": "radiation",
+    "title": "Grasshopper: quick radiation analysis",
+    "thumb": "assets/projects/RadiationAnalysis/Picturesmall.jpg",
+    "category": "grasshopper"
+  }
+]
