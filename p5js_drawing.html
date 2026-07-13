@@ -1,0 +1,125 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.1.9/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.1.9/addons/p5.sound.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <meta charset="utf-8" />
+
+    <style>
+        body {
+            top: 50%;
+            margin-left: 20%;
+        }
+    </style>
+
+<div>        <button><a href="JavaScript:window.close()"><font size="+20">Go back to site</font></a></button></div>
+
+    <body>
+
+
+
+        <form style="width: 200px; float:left; background:gray; margin:10px">
+
+
+            <div class="slidecontainer">
+                <input name="RangeX" type="range" min="0" max="360" value="80" class="slider" id="totalRangex1">
+                <output name="amount" id="amount" for="RangeX"></output>
+            </div>
+            <p>X1 Value: <span id="outputslider"></span></p>
+
+
+
+            <input type="range" min="0" max="360" value="200" class="slider" id="totalRangeY1">
+
+
+            <p>Y1 Value: <span for="totalRangeY1"></span></p>
+        </form>
+
+        <canvas id="myCanvas" width="360" height="360"
+                style="border:2px solid #d3d3d3">
+        </canvas>
+
+        <script>
+            let Oy;
+            let Ox;
+
+
+            function setup() {
+
+            }
+
+            function draw() {
+                var canvas = document.getElementById("myCanvas");
+                var ctx = canvas.getContext("2d");
+
+
+                pixelDensity(1);
+
+
+
+                var schuifknopOX = document.getElementById("totalRangex1").value;
+                var schuifknopOY = document.getElementById("totalRangeY1").value;
+                color1 = color(schuifknopOY, mouseX - schuifknopOX, mouseY * 3);
+                canvas.style.backgroundColor = color1;
+
+
+                
+                ctx.arc(schuifknopOX, schuifknopOY, 5, 0, 2 * Math.PI);
+                
+                
+                ctx.fill();
+                
+
+
+            }
+        </script>
+
+
+
+
+        <div>
+
+            <pre>
+            <h1>Javascript code: code:</h1>
+            let Oy;
+            let Ox;
+
+
+            function setup() {
+
+            }
+
+            function draw() {
+            var canvas = document.getElementById("myCanvas");
+            var ctx = canvas.getContext("2d");
+
+
+            pixelDensity(1);
+
+
+
+            var schuifknopOX = document.getElementById("totalRangex1").value;
+            var schuifknopOY = document.getElementById("totalRangeY1").value;
+            color1 = color(schuifknopOY, mouseX - schuifknopOX, mouseY * 3);
+            canvas.style.backgroundColor = color1;
+
+
+
+            ctx.arc(schuifknopOX, schuifknopOY, 5, 0, 2 * Math.PI);
+            noFill();
+            noStroke();
+            ctx.fill();
+            loadPixels();
+            updatePixels();
+
+
+            }
+            </pre>
+        </div>
+    </body>
+
+
+
+</html>

@@ -1,0 +1,161 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.1.9/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.1.9/addons/p5.sound.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <meta charset="utf-8" />
+
+    <style>
+        body {
+            top: 50%;
+            margin-left: 20%;
+        }
+    </style>
+
+    <body>
+
+        <header>
+            <div>
+                <script>
+                    //canvas
+
+                    function mousePressed() {
+                        setup();
+                    }
+
+                    function setup() {
+
+                        createCanvas(windowWidth, windowHeight);
+
+                        //punt A en B
+                        const x1 = random(100, 500);
+                        const y1 = random(100, 500);
+                        const x2 = random(100, 500);
+                        const y2 = random(100, 500);
+
+
+
+                        //punt C
+                        const x3 = x2
+                        const y3 = y1
+
+                        //schuine zijdes
+                        const A = x2 - x1
+                        const B = y1 - y1
+
+
+                        //pythagoras code
+                        function pythagoras(A, B) {
+                            if ((typeof A !== 'number') || (typeof B !== 'number'))
+                                return false;
+                            else return Math.sqrt(A * A + B * B);
+                        }
+
+
+                        //abc (voor de leuk)
+                        const a = 1
+                        const b = -7
+                        const c = 12
+
+                        function abc1(a, b, c) {
+                            if ((typeof a !== 'number' && a !== 0) || (typeof b !== 'number') || (typeof c !== 'number') || (Math.sqrt(b * b - 4 * a * c < 0)))
+                                return ("niet mogelijk");
+                            else return (-1 * b + Math.sqrt((b * b) - 4 * a * c)) / 2 * a;
+                        }
+
+                        function abc2(a, b, c) {
+                            if ((typeof a !== 'number' && a !== 0) || (typeof b !== 'number') || (typeof c !== 'number') || (Math.sqrt(b * b - 4 * a * c < 0)))
+                                return ("ook niet mogelijk");
+                            else return (-1 * b - Math.sqrt((b * b) - 4 * a * c)) / 2 * a;
+                        }
+
+                        //uitkomst printen
+                        console.log("Pythagoras: afstand van punt a(" + x1 + ", " + y1 + ") naar punt b(" + x2 + ", " + y2 + ") is " + pythagoras(A, B));
+                        console.log("ABC: de eerste uitkomst is " + abc1(a, b, c));
+                        console.log("ABC: de tweede uitkomst is " + abc2(a, b, c));
+
+                        //driehoek tekenen
+                        triangle(x1, y1, x2, y2, x3, y3)
+                    }
+
+
+                </script>
+            </div>
+        </header>
+
+        <button><a href="JavaScript:window.close()"><font size="+20">Go back to site</font></a></button>
+
+        <div>
+
+            <pre>
+            <h1> Javascript code:</h1>
+            <h1>Scroll down and click anywhere to generate a triangle</h1>
+//canvas
+
+function mousePressed() {
+  setup();
+}
+
+function setup() {
+  
+  createCanvas(windowWidth, windowHeight);
+
+//punt A en B
+const x1 = random(100, 500);
+const y1 = random(100, 500);
+const x2 = random(100, 500);
+const y2 = random(100, 500);
+
+
+  
+//punt C
+const x3 = x2
+const y3 = y1
+
+//schuine zijdes
+const A = x2-x1
+const B = y1-y1
+
+
+//pythagoras code
+function pythagoras(A, B) {
+  if ((typeof A !== 'number') || (typeof B !== 'number')) 
+return false; 
+	else return Math.sqrt(A * A + B * B);
+	}
+
+
+//abc (voor de leuk)
+const a = 1
+const b = -7
+const c = 12
+
+function abc1(a, b, c) {
+  if ((typeof a !== 'number' && a !==0) || (typeof b !== 'number') || (typeof c !== 'number') || (Math.sqrt(b*b-4*a*c < 0)) ) 
+return ("niet mogelijk"); 
+	else return (-1*b + Math.sqrt((b*b)-4*a*c))/2*a;
+	}
+
+function abc2(a, b, c) {
+  if ((typeof a !== 'number' && a !==0) || (typeof b !== 'number') || (typeof c !== 'number') || (Math.sqrt(b*b-4*a*c < 0)) ) 
+return ("ook niet mogelijk"); 
+	else return (-1*b - Math.sqrt((b*b)-4*a*c))/2*a;
+	}
+
+//uitkomst printen
+console.log("Pythagoras: afstand van punt a(" + x1 + ", " + y1 + ") naar punt b(" + x2 + ", " + y2 + ") is " + pythagoras(A, B));
+console.log("ABC: de eerste uitkomst is " + abc1(a, b, c));
+console.log("ABC: de tweede uitkomst is " + abc2(a, b, c));
+
+//driehoek tekenen
+triangle(x1, y1, x2, y2, x3, y3)
+}
+
+
+
+            </pre>
+        </div>
+
+    </body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Image Test</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      flex-direction: column;
+      background: #f7f7f7;
+      font-family: Arial, sans-serif;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 500px; /* Update this width to match the new canvas/image width */
+    }
+
+    #myCanvas {
+      border: 2px solid #d3d3d3;
+    }
+
+    pre {
+      text-align: left;
+      background-color: #eee;
+      padding: 1em;
+      border-radius: 5px;
+      margin-top: 1em;
+      overflow: auto;
+      word-wrap: break-word;
+      width: 500px; /* Match the canvas width */
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+
+<div class="container">
+    <body>
+
+
+        <canvas id="myCanvas" width="500" height="500"></canvas>
+
+
+
+        <script>
+
+
+
+
+            let img = new Image();
+            let modulo;
+            let epilepsie = 0;
+            img.onload = function() {
+            applyFilter();
+            };
+            img.src = "P5js/Kestrel.jpg"; // Make sure this path is correct!
+
+            function applyFilter() {
+            const canvas = document.getElementById('myCanvas');
+            const ctx = canvas.getContext('2d');
+            // Draw the image on the canvas
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let pixels = imageData.data;
+
+            modulo = 16 + 47 * Math.sin(epilepsie) ** 2;
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                let index = (x + y * canvas.width) * 4;
+                let r = pixels[index + 0];
+                let g = pixels[index + 1];
+                let b = pixels[index + 2];
+
+                if (r % modulo < 10) {
+                    pixels[index + 0] = 255;
+                }
+                if (g % modulo < 10) {
+                    pixels[index + 1] = 255;
+                }
+                if (b % modulo < 10) {
+                    pixels[index + 2] = 255;
+                }
+                }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+            epilepsie += 0.05;
+
+            // To continuously animate, you can call requestAnimationFrame here
+            requestAnimationFrame(applyFilter);
+            }
+        </script>
+
+
+
+<div>
+<pre>
+
+
+
+
+<h1> Code: </h1>
+<p>Allow access to the camera the camera to see the filter.</p>
+
+// Ik heb uit de vorige tutorial alles gekopieerd 
+om makkelijk verder te kunnen
+let img;
+let modulo;
+let epilepsie = 0;
+function preload() {
+img = loadImage("Informatica p5js.jpg");
+frameRate(30);
+}
+function setup() {
+createCanvas(img.width, img.height);
+pixelDensity(1);
+}
+
+function draw() {
+image(img, 0, 0, img.width, img.height);
+var modulo = 16+47*Math.sin(epilepsie)**2;
+//console.log(modulo, epilepsie)
+loadPixels();
+for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+    var index = (x + y * width) * 4;
+    var r = pixels[index + 0];
+    var g = pixels[index + 1];
+    var b = pixels[index + 2];
+    var a = pixels[index + 3];
+
+    if (r % modulo < 10) {
+        pixels[index + 0] = 255;
+    }
+    if (g % modulo < 10) {
+        pixels[index + 1] = 255;
+    }
+    if (b % modulo < 10) {
+        pixels[index + 2] = 255;
+    }
+    }
+}
+updatePixels();
+epilepsie += 0.05;
+}
+
+
+
+
+</pre>
+</div>
+
+</body>
+
+</html>

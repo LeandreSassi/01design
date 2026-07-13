@@ -1,0 +1,45 @@
+# Project media/asset folders — images, videos, source model files.
+# These get uploaded to Hostinger directly (FTP/File Manager), not via GitHub.
+Booklet/
+ControlGAN/
+Dimensions/
+Education/
+FireFly/
+Forloops/
+GANapplication/
+GlitchGAN/
+GridDisto/
+Hautepierre/
+ImageProcessing/
+Lely/
+Make2D/
+P5js/
+PDF/
+PixelSort/
+Portfolio/
+PythonCourse/
+RadiationAnalysis/
+Tutorials/
+Ward/
+Website/
+
+# Old ASP.NET build output, unused by the current static site
+Bin/
+
+# Root-level media
+me.png
+
+# Windows Explorer folder-view junk
+desktop.ini
+
+# Safety net for stray large binaries anywhere else
+*.mp4
+*.mov
+*.gif
+*.GIF
+*.psd
+*.3dm
+*.3dmbak
+*.dwg
+*.dwgbak
+*.kdenlive

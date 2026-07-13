@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>repl.it</title>
+    <link href="style.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.4.1/lib/p5.js"></script>
+  </head>
+
+  <button><a href="JavaScript:window.close()"><font size="+20">Go back to site</font></a></button>
+
+
+  <body>
+
+
+    <style>
+    body {
+        margin: 0;
+        padding: 0;
+        background-color: black;
+        font-family: 'Courier';
+        color: white;
+        font-size: 12pt;
+        line-height: 10pt;
+    }
+
+    canvas {
+        display: inside;
+    }
+
+
+    </style>
+    <script>
+        const density = "è@#W$9876543210?!abc;:+=-,._                   ";
+
+let video;
+let asciiDiv;
+
+function setup() {
+  noCanvas();
+  video = createCapture(VIDEO);
+  video.size(64, 48);
+  asciiDiv = createDiv();
+}
+
+function draw() {
+  video.loadPixels();
+  let asciiImage = "";
+  for (let y = 0; y < video.height; y++) {
+    for (let x = 0; x < video.width; x++) {
+      const pixelIndex = (x + y * video.width) * 4;
+      const r = video.pixels[pixelIndex + 0];
+      const g = video.pixels[pixelIndex + 1];
+      const b = video.pixels[pixelIndex + 2];
+      const avg = (r + g + b) / 3;
+      //Gemiddelde van de RGB-waardes.
+      const len = density.length;
+      const charIndex = floor(map(avg, 0, 255, 0, len));
+      const c = density.charAt(charIndex);
+      if (c == " ") asciiImage += "&nbsp;";
+      else asciiImage += c;
+    }
+    asciiImage += '<br/>';
+    //Dit gaat over de HTML code.
+  }
+  asciiDiv.html(asciiImage);
+  //Dit gaat ook over de HTML code.
+}
+
+    </script>
+
+</body>
+
+<footer>
+<div>
+
+    <pre>
+    <h1> Javascript code: (scroll down for the filter)</h1>
+    <p>Allow access to the camera the camera to see the filter.</p>
+//canvas
+
+const density = "è@#W$9876543210?!abc;:+=-,._                   ";
+
+let video;
+let asciiDiv;
+
+function setup() {
+  noCanvas();
+  video = createCapture(VIDEO);
+  video.size(64, 48);
+  asciiDiv = createDiv();
+}
+
+function draw() {
+  video.loadPixels();
+  let asciiImage = "";
+  for (let y = 0; y < video.height; y++) {
+    for (let x = 0; x < video.width; x++) {
+      const pixelIndex = (x + y * video.width) * 4;
+      const r = video.pixels[pixelIndex + 0];
+      const g = video.pixels[pixelIndex + 1];
+      const b = video.pixels[pixelIndex + 2];
+      const avg = (r + g + b) / 3;
+      //Gemiddelde van de RGB-waardes.
+      const len = density.length;
+      const charIndex = floor(map(avg, 0, 255, 0, len));
+      const c = density.charAt(charIndex);
+      if (c == " ") asciiImage += "&nbsp;";
+      else asciiImage += c;
+    }
+    asciiImage += '<br/>';
+    //Dit gaat over de HTML code.
+  }
+  asciiDiv.html(asciiImage);
+  //Dit gaat ook over de HTML code.
+}
+
+
+
+
+    </pre>
+</div>
+</footer>
+</html>
