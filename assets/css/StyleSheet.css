@@ -1,9 +1,15 @@
-﻿body, html {
-    color: antiquewhite;
-    /* font-family: Garamond, serif; */
-    font-family: 'SegoeUI_online_security'; 
-    src: url(chrome-extension://llbcnfanfmjhpedaedhbcnpgeepdnnok/segoe-ui.woff);
-    background-color: #222;
+﻿/* ===========================================================================
+   Theme colors — change these two values to restyle the whole site.
+   =========================================================================== */
+:root {
+    --color-text: #ECEDF2;
+    --color-bg: #126D71;
+}
+
+body, html {
+    color: var(--color-text);
+    font-family: 'Trebuchet MS', sans-serif;
+    background-color: var(--color-bg);
     text-align: justify;
     text-justify: inter-word;
     height:100%;
@@ -24,10 +30,6 @@
     overflow: auto;
     background-color: #222;
     background-color: rgba(0,0,0,0.4);
-    -moz-filter: blur(1px);
-    -o-filter: blur(1px);
-    -webkit-filter: blur(1px);
-    filter: blur(1px);
 }
 
 
@@ -55,7 +57,7 @@
 /* Modal Content */
 .modal-content {
     position: relative;
-    background-color: #222;
+    background-color: var(--color-bg);
     margin: auto;
     margin-bottom: 20%;
     padding: 2%;
@@ -66,6 +68,13 @@
     -webkit-animation-duration: 0.4s;
     animation-name: animatetop;
     animation-duration: 0.4s;
+}
+
+/* Headings shouldn't be justified — that stretches the words on wrapped lines */
+.modal-content h1,
+.modal-content h2,
+.modal-content h3 {
+    text-align: left;
 }
 
 .modal-iframe-fullscreen {
@@ -102,7 +111,7 @@ iframe {
 
 /* The Close Button */
 .close {
-    color: antiquewhite;
+    color: var(--color-text);
     float: right;
     font-size: 28px;
     font-weight: bold;
@@ -129,10 +138,10 @@ header {
     position: sticky;
     clear: both;
     margin-bottom: 0%;
-    background-color: #222;
+    background-color: var(--color-bg);
     padding-bottom: 0px;
     text-align: center;
-    color: antiquewhite;
+    color: var(--color-text);
     margin-bottom: 50px;
 }
 
@@ -179,6 +188,17 @@ img {
     justify-content: space-evenly;
     align-items: baseline;
     align-content: stretch;
+}
+
+/* Filter bar shares the grid's flex distribution so the buttons line up
+   under the project cards. */
+#filter-bar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+    align-items: center;
+    margin-bottom: 30px;
 }
 
 .wrapper3 {
@@ -241,8 +261,8 @@ article {
 
 /* Button styles */
 button {
-    background-color: #222; /* Primary color */
-    color: antiquewhite;
+    background-color: var(--color-bg); /* Primary color */
+    color: var(--color-text);
     border: none;
     padding: 10px 20px;
     margin: 5px;
@@ -251,9 +271,9 @@ button {
   
   /* Inverted button styles for when a button is clicked */
   button.active {
-    background-color: antiquewhite; /* Inverted color */
-    color: #222;
-    border: 2px solid #222;
+    background-color: var(--color-text); /* Inverted color */
+    color: var(--color-bg);
+    border: 2px solid var(--color-bg);
   }
 
 .modal-button {
@@ -268,10 +288,6 @@ button {
     padding: 1%;
     margin: auto;
     margin-bottom: 5%;
-    -moz-filter: blur(0.5px);
-    -o-filter: blur(0.5px);
-    -webkit-filter: blur(0.5px);
-    filter: blur(0.5px);
     font-weight: 700;
     scroll-margin-top: 100px;
     align-content: center;
@@ -282,7 +298,8 @@ button {
 }
 
     .modal-button p {
-        backdrop-filter: blur(5px) brightness(50%) saturate(50%);
+        background-color: color-mix(in srgb, var(--color-bg) 55%, transparent);
+        backdrop-filter: blur(5px);
         font-size: 20px;
         padding: 2%;
     }
@@ -297,16 +314,12 @@ button {
     /*   width: 85.2%; */
     transform: scale(1.02);
     font-size: 105;
-    -moz-filter: blur(0px);
-    -o-filter: blur(0px);
-    -webkit-filter: blur(0px);
-    filter: blur(0px);
 }
 
 
 a:link, a:visited {
     float: none;
-    color: antiquewhite;
+    color: var(--color-text);
     text-decoration: none;
 }
 
@@ -338,12 +351,12 @@ a:link, a:visited {
     position: sticky;
     text-align: center;
     list-style: none;
-    background-color: #222;
+    background-color: var(--color-bg);
     border-radius: 5px;
     width: 200px;
     padding: 10px;
     border: 0px 0px 0px 0px;
-    color: antiquewhite;
+    color: var(--color-text);
     -webkit-border-radius: 5px;
     -moz-border-radius: 5px;
     -ms-border-radius: 5px;
@@ -359,7 +372,7 @@ a:link, a:visited {
     z-index: 1;
     -webkit-backdrop-filter: blur(1px);
     backdrop-filter: blur(2px);
-    background-color: antiquewhite;
+    background-color: var(--color-text);
     display: flex;
 
     flex-wrap: nowrap;
@@ -376,7 +389,7 @@ a:link, a:visited {
     z-index: 1;
     -webkit-backdrop-filter: blur(1px);
     backdrop-filter: blur(2px);
-    background-color: antiquewhite;
+    background-color: var(--color-text);
     display: flex;
 
     flex-wrap: nowrap;

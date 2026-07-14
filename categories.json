@@ -1,0 +1,12 @@
+[
+  { "id": "architecture", "label": "Architecture" },
+  { "id": "teaching", "label": "Teaching" },
+  { "id": "ai", "label": "Generative AI" },
+  { "id": "parametric", "label": "Parametric design" },
+  { "id": "simulations", "label": "Simulations" },
+  { "id": "interoperability", "label": "Interoperability" },
+  { "id": "imageprocessing", "label": "Image processing" },
+  { "id": "python", "label": "Python" },
+  { "id": "grasshopper", "label": "Grasshopper" },
+  { "id": "web", "label": "WebApps" }
+]

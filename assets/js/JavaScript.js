@@ -12,13 +12,27 @@ function buildCard(project) {
     card.className = 'open-modal-button modal-button';
     card.id = project.id;
     card.dataset.modalTarget = `#modal-${project.id}`;
-    card.dataset.category = project.category || '';
+    card.dataset.categories = (project.categories || []).join(' ');
     card.style.backgroundImage = `url('${project.thumb}')`;
 
     const label = document.createElement('p');
     label.textContent = project.title;
     card.appendChild(label);
     return card;
+}
+
+// Build one filter button. Pass id '' for the "All" button (shows everything).
+function buildFilterButton(id, label) {
+    const button = document.createElement('button');
+    button.className = 'filter-btn';
+    button.dataset.category = id;
+    button.textContent = label;
+    button.addEventListener('click', function () {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        button.classList.add('active');
+        filterProjects(id);
+    });
+    return button;
 }
 
 // Build the empty modal container that its content gets fetched into on click.
@@ -59,10 +73,11 @@ function closeAllModals() {
     });
 }
 
-// Show only cards in the given category ('' shows all).
+// Show only cards that belong to the given category ('' shows all).
 function filterProjects(category) {
     document.querySelectorAll('.modal-button').forEach(card => {
-        const show = category === '' || card.dataset.category === category;
+        const categories = card.dataset.categories.split(' ');
+        const show = category === '' || categories.includes(category);
         card.style.display = show ? '' : 'none';
     });
 }
@@ -112,7 +127,23 @@ function attachControlGANVideoSlider() {
 document.addEventListener('DOMContentLoaded', () => {
     const grid = document.getElementById('project-grid');
     const modalRoot = document.getElementById('modal-root');
+    const filterBar = document.getElementById('filter-bar');
 
+    // Filter buttons come from the category taxonomy in categories.json,
+    // followed by an "All" button (active by default) that clears the filter.
+    fetch('categories.json')
+        .then(response => response.json())
+        .then(categories => {
+            categories.forEach(category => {
+                filterBar.appendChild(buildFilterButton(category.id, category.label));
+            });
+            const allButton = buildFilterButton('', 'All');
+            allButton.classList.add('active');
+            filterBar.appendChild(allButton);
+        })
+        .catch(error => console.error('Could not load categories.json:', error));
+
+    // Cards and modal containers come from projects.json.
     fetch('projects.json')
         .then(response => response.json())
         .then(projects => {
@@ -125,16 +156,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         })
         .catch(error => console.error('Could not load projects.json:', error));
-
-    // Category filter buttons — clicking an active button again clears the filter.
-    document.querySelectorAll('.filter-btn').forEach(button => {
-        button.addEventListener('click', function () {
-            const wasActive = button.classList.contains('active');
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            if (!wasActive) button.classList.add('active');
-            filterProjects(wasActive ? '' : button.dataset.category);
-        });
-    });
 
     attachNavHoverEffect();
 });
