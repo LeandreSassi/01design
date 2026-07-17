@@ -14,10 +14,10 @@
       "label": "Subject",
       "categories": [
         { "id": "ai", "label": "Generative AI" },
-        { "id": "parametric", "label": "Parametric design" },
-        { "id": "imageprocessing", "label": "Image processing" },
         { "id": "web", "label": "WebApps" },
-        { "id": "interoperability", "label": "Interoperability" }
+        { "id": "parametric", "label": "Parametric design" },
+        { "id": "interoperability", "label": "Interoperability" },
+        { "id": "imageprocessing", "label": "Image processing" }
       ]
     },
     {

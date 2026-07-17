@@ -3,7 +3,7 @@
     "id": "portfolio",
     "title": "Architecture portfolio",
     "thumb": "assets/projects/Portfolio/cover.png",
-    "categories": ["architecture", "parametric"]
+    "categories": ["architecture", "interoperability"]
   },
   {
     "id": "controlGAN",
