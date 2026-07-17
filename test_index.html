@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>01Design — 3D test</title>
+    <link href="assets/css/StyleSheet.css" rel="stylesheet" />
+    <style>
+        html, body { margin: 0; height: 100%; overflow: hidden; }
+        #scene { position: fixed; inset: 0; display: block; }
+
+        #topbar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+            display: flex; align-items: center; gap: 16px; padding: 8px 16px;
+            background: color-mix(in srgb, var(--color-bg) 88%, black);
+            box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+        }
+        #title-badge { font-weight: 700; font-size: 22px; letter-spacing: 0.02em; flex: none; }
+        #topbar .filter-btn { margin: 2px; padding: 6px 12px; font-size: 14px; }
+
+        #hint {
+            position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+            font-size: 13px; letter-spacing: 0.04em; opacity: 0.65;
+            pointer-events: none; user-select: none; text-align: center;
+        }
+        #tooltip {
+            position: fixed; pointer-events: none; z-index: 10;
+            padding: 6px 10px; border-radius: 4px; font-size: 14px; font-weight: 700;
+            background: color-mix(in srgb, var(--color-bg) 70%, black);
+            border: 1px solid color-mix(in srgb, var(--color-text) 40%, transparent);
+            transform: translate(-50%, -140%); white-space: nowrap;
+            opacity: 0; transition: opacity 0.12s ease;
+        }
+        #scene-modal-root .modal { display: none; }
+
+        /* Hover preview: a mini project card, docked right (landscape) / bottom (portrait) */
+        #hover-preview {
+            position: fixed; z-index: 9; pointer-events: none;
+            opacity: 0; transition: opacity 0.15s ease;
+        }
+        @media (orientation: landscape) {
+            #hover-preview { top: 50%; right: 28px; transform: translateY(-50%); }
+        }
+        @media (orientation: portrait) {
+            #hover-preview { bottom: 28px; left: 50%; transform: translateX(-50%); }
+        }
+        #preview-card {
+            width: 190px; height: 190px;
+            background-size: cover; background-position: center;
+            border-radius: 3px; overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
+            text-align: center; font-weight: 700;
+            box-shadow: 0 0 24px rgba(0,0,0,0.4);
+        }
+        #preview-card p {
+            width: 100%; margin: 0; padding: 8px 6px;
+            font-size: 15px; color: var(--color-text);
+            background-color: color-mix(in srgb, var(--color-bg) 55%, transparent);
+            backdrop-filter: blur(5px);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="scene"></canvas>
+
+    <div id="topbar">
+        <div id="title-badge">01Design</div>
+        <button id="reset-rows" class="filter-btn">Show all</button>
+    </div>
+    <div id="tooltip"></div>
+    <div id="hover-preview">
+        <div id="preview-card"><p id="preview-title"></p></div>
+    </div>
+    <div id="hint">drag to orbit &nbsp;•&nbsp; scroll to zoom &nbsp;•&nbsp; click a row name to hide/show it &nbsp;•&nbsp; click a cube to open</div>
+
+    <div id="scene-modal-root"></div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const css = getComputedStyle(document.documentElement);
+        const COLOR_BG = css.getPropertyValue('--color-bg').trim() || '#126D71';
+        const COLOR_TEXT = css.getPropertyValue('--color-text').trim() || '#ECEDF2';
+
+        // ---- scene ---------------------------------------------------------
+        const canvas = document.getElementById('scene');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(COLOR_BG);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(11, 8, 13);
+
+        const controls = new OrbitControls(camera, canvas);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.autoRotate = false;
+        controls.minDistance = 6;
+        controls.maxDistance = 45;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const key = new THREE.DirectionalLight(0xffffff, 1.1);
+        key.position.set(8, 12, 6);
+        scene.add(key);
+        const fill = new THREE.DirectionalLight(0xffffff, 0.35);
+        fill.position.set(-6, 2, -8);
+        scene.add(fill);
+
+        // ---- matrix parameters ----------------------------------------------
+        // Axis mapping: X = output, Y (vertical) = language, Z = subject
+        const SPACING = 1.8;
+        const CUBE_SIZE = 1.55;
+        const EDGE_COLOR = new THREE.Color(COLOR_TEXT);
+        const EDGE_OPACITY = 0.5;
+
+        const GRAVITY = 0.02;
+        const BOUNCE = 0.32;
+        const DROP_HEIGHT = 12;
+        const FLOOR_OUT = -16;
+
+        let DIMS = [1, 1, 1];   // set from taxonomy after load
+        function axisCoord(idx, n) { return (idx - (n - 1) / 2) * SPACING; }
+        function cellPosition(ix, iy, iz) {
+            return new THREE.Vector3(
+                axisCoord(ix, DIMS[0]), axisCoord(iy, DIMS[1]), axisCoord(iz, DIMS[2])
+            );
+        }
+
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        const cubeMeshes = [];
+        const labelSprites = [];
+        // rowVisible[axisIndex][categoryIndex] -> bool
+        const rowVisible = [];
+        let hovered = null;        // cube OR label sprite
+
+        Promise.all([
+            fetch('taxonomy.json').then(r => r.json()),
+            fetch('projects.json').then(r => r.json())
+        ]).then(([taxonomy, projects]) => {
+            const axes = taxonomy.axes;           // [output, subject, language]
+            const outputAxis = axes.find(a => a.id === 'output');
+            const subjectAxis = axes.find(a => a.id === 'subject');
+            const languageAxis = axes.find(a => a.id === 'language');
+            // dimension order: X = output, Y = language, Z = subject
+            const dimAxes = [outputAxis, languageAxis, subjectAxis];
+            DIMS = dimAxes.map(a => a.categories.length);
+            dimAxes.forEach((a, i) => rowVisible[i] = a.categories.map(() => true));
+
+            const indexOf = (axis, project) => {
+                // first matching category of this axis, in the project's own tag order
+                for (const tag of project.categories || []) {
+                    const k = axis.categories.findIndex(c => c.id === tag);
+                    if (k !== -1) return k;
+                }
+                return -1;
+            };
+
+            // subject drives cube color
+            const subjectColors = subjectAxis.categories.map((c, i) =>
+                new THREE.Color().setHSL(i / subjectAxis.categories.length, 0.5, 0.6));
+
+            // resolve each project to a cell; collect skipped ones
+            const cellMap = new Map();   // "ix,iy,iz" -> [project entries]
+            const skipped = [];
+            projects.forEach(project => {
+                const ix = indexOf(outputAxis, project);
+                const iy = indexOf(languageAxis, project);
+                const iz = indexOf(subjectAxis, project);
+                if (ix === -1 || iy === -1 || iz === -1) { skipped.push(project.id); return; }
+                const k = ix + ',' + iy + ',' + iz;
+                if (!cellMap.has(k)) cellMap.set(k, []);
+                cellMap.get(k).push({ project, ix, iy, iz });
+            });
+            if (skipped.length) console.warn('Not placed (missing axis tag):', skipped.join(', '));
+
+            // sub-cell offsets when several projects share one cell
+            const subOffsets = m => {
+                const q = SPACING * 0.25;
+                if (m === 1) return [[0, 0]];
+                if (m === 2) return [[-q, 0], [q, 0]];
+                if (m === 3) return [[-q, -q], [q, -q], [0, q]];
+                return [[-q, -q], [q, -q], [-q, q], [q, q]];
+            };
+
+            const boxGeo = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
+            const edgeGeo = new THREE.EdgesGeometry(boxGeo);
+
+            cellMap.forEach(entries => {
+                const offs = subOffsets(entries.length);
+                const baseScale = entries.length > 1 ? 0.48 : 1;
+                entries.forEach((e, j) => {
+                    const { project, ix, iy, iz } = e;
+                    const color = subjectColors[iz].clone().lerp(new THREE.Color(COLOR_BG), 0.15);
+                    const mesh = new THREE.Mesh(
+                        boxGeo,
+                        new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05 })
+                    );
+                    const home = cellPosition(ix, iy, iz);
+                    home.x += offs[j][0];
+                    home.z += offs[j][1];
+                    mesh.position.copy(home);
+                    mesh.scale.setScalar(baseScale);
+                    mesh.add(new THREE.LineSegments(
+                        edgeGeo, new THREE.LineBasicMaterial({ color: EDGE_COLOR, transparent: true, opacity: EDGE_OPACITY })
+                    ));
+                    mesh.userData = {
+                        kind: 'cube', id: project.id, title: project.title, thumb: project.thumb,
+                        home, ix, iy, iz, vy: 0, vx: 0, vz: 0, wx: 0, wz: 0,
+                        state: 'home', baseScale, scale: baseScale
+                    };
+                    scene.add(mesh);
+                    cubeMeshes.push(mesh);
+                });
+            });
+
+            // faint bounding wireframe of the full matrix
+            const BORDER = 0.06;
+
+            const ext = DIMS.map(n => (n - 1) * SPACING + CUBE_SIZE + BORDER);
+            scene.add(new THREE.LineSegments(
+                new THREE.EdgesGeometry(new THREE.BoxGeometry(ext[0], ext[1], ext[2])),
+                new THREE.LineBasicMaterial({ color: EDGE_COLOR, transparent: true, opacity: 0.15 })
+            ));
+
+            // ---- clickable row labels in 3D ---------------------------------
+            const half = ext.map(e => e / 2);
+            const M = 1;   // margin outside the volume
+            // X rows (output): along the front-bottom edge
+            outputAxis.categories.forEach((c, i) => addRowLabel(
+                c.label, 0, i,
+                new THREE.Vector3(axisCoord(i, DIMS[0]), -half[1] - 0, half[2] + M )));
+            // Y rows (language): up the front-left edge
+            languageAxis.categories.forEach((c, i) => addRowLabel(
+                c.label, 1, i,
+                new THREE.Vector3(-half[0] - M , axisCoord(i, DIMS[1]), half[2] + M - 1)));
+            // Z rows (subject): receding along the right-bottom edge
+            subjectAxis.categories.forEach((c, i) => addRowLabel(
+                c.label, 2, i,
+                new THREE.Vector3(half[0] + M , -half[1], axisCoord(i, DIMS[2]))));
+
+            // intro drop
+            cubeMeshes.forEach(dropIn);
+        });
+
+        function addRowLabel(text, axis, index, position) {
+            const pad = 0, font = 20;
+            const c = document.createElement('canvas');
+            const ctx = c.getContext('2d');
+            ctx.font = `700 ${font}px 'Trebuchet MS', sans-serif`;
+            c.width = Math.ceil(ctx.measureText(text).width) + pad * 2;
+            c.height = font + pad * 2;
+            const ctx2 = c.getContext('2d');
+            ctx2.font = `700 ${font}px 'Trebuchet MS', sans-serif`;
+            ctx2.fillStyle = COLOR_TEXT;
+            ctx2.textBaseline = 'middle';
+            ctx2.fillText(text, pad, c.height / 2);
+
+
+            const tex = new THREE.CanvasTexture(c);
+            tex.anisotropy = 4;
+
+            const s = 0.012;
+
+            const geometry = new THREE.PlaneGeometry(
+                c.width * s,
+                c.height * s
+            );
+
+            if (axis === 0) {
+                // Y labels: left-justified
+                geometry.translate(-(c.width * s) / 2, 0, 0);
+            } else if (axis == 1) {
+                // y label: right-justified
+                geometry.translate(-(c.width * s) / 2, 0, 0);
+            } else {
+                geometry.translate((c.width * s) / 2, 0, 0);
+            }
+
+            const material = new THREE.MeshBasicMaterial({
+                map: tex,
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+
+            const label = new THREE.Mesh(geometry, material);
+
+            label.position.copy(position);
+
+            // Orient parallel to the corresponding axis
+            if (axis === 0) {
+                // X axis (horizontal)
+                label.rotation.set(-Math.PI / 2, 0, Math.PI / 2);
+            }
+            else if (axis === 1) {
+                // Y axis (vertical)
+                label.rotation.set(0, Math.PI / 4, 0);
+            }
+            else {
+                // Z axis (depth)
+                label.rotation.set(Math.PI * 1.5 , 0, 0);
+            }
+
+            label.userData = { kind: 'label', axis, index, text };
+
+            scene.add(label);
+            labelSprites.push(label);
+        }
+
+        // ---- physics ---------------------------------------------------------
+        function dropIn(mesh) {
+            const u = mesh.userData;
+            mesh.visible = true;
+            mesh.rotation.set(0, 0, 0);
+            mesh.position.set(u.home.x, u.home.y + DROP_HEIGHT + Math.random() * 4, u.home.z);
+            u.vy = 0;
+            u.state = 'dropping';
+        }
+        // released cubes are flung outward and tumble down off the block
+        function startRemove(mesh) {
+            const u = mesh.userData;
+            u.state = 'falling';
+            u.vy = 0.04;
+            const len = Math.hypot(u.home.x, u.home.z) || 1;
+            u.vx = (u.home.x / len) * 0.06 + (Math.random() - 0.5) * 0.03;
+            u.vz = (u.home.z / len) * 0.06 + (Math.random() - 0.5) * 0.03;
+            u.wx = (Math.random() - 0.5) * 0.14;
+            u.wz = (Math.random() - 0.5) * 0.14;
+        }
+        function stepCube(mesh) {
+            const u = mesh.userData;
+            if (u.state === 'dropping') {
+                u.vy -= GRAVITY;
+                mesh.position.y += u.vy;
+                if (mesh.position.y <= u.home.y) {
+                    mesh.position.y = u.home.y;
+                    u.vy = -u.vy * BOUNCE;
+                    if (Math.abs(u.vy) < 0.08) { u.vy = 0; u.state = 'home'; }
+                }
+            } else if (u.state === 'falling') {
+                u.vy -= GRAVITY;
+                mesh.position.x += u.vx;
+                mesh.position.z += u.vz;
+                mesh.position.y += u.vy;
+                mesh.rotation.x += u.wx;
+                mesh.rotation.z += u.wz;
+                if (mesh.position.y < FLOOR_OUT) { mesh.visible = false; u.state = 'hidden'; }
+            }
+        }
+
+        // ---- row toggling ----------------------------------------------------
+        function cubeShouldShow(mesh) {
+            const u = mesh.userData;
+            return rowVisible[0][u.ix] && rowVisible[1][u.iy] && rowVisible[2][u.iz];
+        }
+        function applyVisibility() {
+            cubeMeshes.forEach(mesh => {
+                const show = cubeShouldShow(mesh);
+                const st = mesh.userData.state;
+                if (show && (st === 'hidden' || st === 'falling')) dropIn(mesh);
+                else if (!show && (st === 'home' || st === 'dropping')) startRemove(mesh);
+            });
+        }
+        function toggleRow(axis, index) {
+            rowVisible[axis][index] = !rowVisible[axis][index];
+            labelSprites.forEach(sp => {
+                if (sp.userData.axis === axis && sp.userData.index === index)
+                    sp.material.opacity = rowVisible[axis][index] ? 1 : 0.3;
+            });
+            applyVisibility();
+        }
+        document.getElementById('reset-rows').addEventListener('click', () => {
+            rowVisible.forEach(row => row.fill(true));
+            labelSprites.forEach(sp => (sp.material.opacity = 1));
+            applyVisibility();
+        });
+
+        // ---- interaction -----------------------------------------------------
+        const tooltip = document.getElementById('tooltip');
+        const preview = document.getElementById('hover-preview');
+        const previewCard = document.getElementById('preview-card');
+        const previewTitle = document.getElementById('preview-title');
+        window.addEventListener('pointermove', e => {
+            pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            tooltip.style.left = e.clientX + 'px';
+            tooltip.style.top = e.clientY + 'px';
+        });
+
+        function updateHover() {
+            raycaster.setFromCamera(pointer, camera);
+            const targets = [...cubeMeshes.filter(m => m.visible), ...labelSprites];
+            const hits = raycaster.intersectObjects(targets, false);
+            const hit = hits.length ? hits[0].object : null;
+            if (hit !== hovered) {
+                hovered = hit;
+                if (hovered && hovered.userData.kind === 'cube') {
+                    tooltip.textContent = hovered.userData.title;
+                    tooltip.style.opacity = '1';
+                    document.body.style.cursor = 'pointer';
+                    if (hovered.userData.thumb) {
+                        previewCard.style.backgroundImage = `url('${hovered.userData.thumb}')`;
+                        previewTitle.textContent = hovered.userData.title;
+                        preview.style.opacity = '1';
+                    }
+                } else if (hovered) {   // label
+                    tooltip.textContent = 'toggle: ' + hovered.userData.text;
+                    tooltip.style.opacity = '1';
+                    document.body.style.cursor = 'pointer';
+                    preview.style.opacity = '0';
+                } else {
+                    tooltip.style.opacity = '0';
+                    preview.style.opacity = '0';
+                    document.body.style.cursor = 'default';
+                }
+            }
+        }
+
+        const modalRoot = document.getElementById('scene-modal-root');
+        canvas.addEventListener('click', () => {
+            if (!hovered) return;
+            if (hovered.userData.kind === 'cube') openProjectModal(hovered.userData.id);
+            else toggleRow(hovered.userData.axis, hovered.userData.index);
+        });
+
+        function openProjectModal(id) {
+            let container = document.getElementById('modal-' + id);
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'modal-' + id;
+                container.className = 'modal';
+                modalRoot.appendChild(container);
+            }
+            if (container.classList.contains('loaded')) { container.style.display = 'block'; return; }
+            fetch(`modals/${id}_modal_content.html`)
+                .then(r => r.text())
+                .then(html => {
+                    container.innerHTML = html;
+                    container.classList.add('loaded');
+                    container.querySelectorAll('.close').forEach(btn =>
+                        btn.addEventListener('click', () => (container.style.display = 'none')));
+                    container.style.display = 'block';
+                })
+                .catch(err => console.error(err));
+        }
+        window.addEventListener('click', e => {
+            if (e.target.classList && e.target.classList.contains('modal')) e.target.style.display = 'none';
+        });
+        window.addEventListener('keydown', e => {
+            if (e.key === 'Escape')
+                document.querySelectorAll('#scene-modal-root .modal').forEach(m => (m.style.display = 'none'));
+        });
+
+        // ---- render loop -----------------------------------------------------
+        function animate() {
+            requestAnimationFrame(animate);
+            updateHover();
+            cubeMeshes.forEach(m => {
+                stepCube(m);
+                if (m.userData.state === 'falling' || m.userData.state === 'hidden') return;
+                const u = m.userData;
+                const target = (m === hovered ? 1.12 : 1) * u.baseScale;
+                u.scale += (target - u.scale) * 0.2;
+                m.scale.setScalar(u.scale);
+            });
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

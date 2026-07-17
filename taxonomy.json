@@ -1,0 +1,33 @@
+{
+  "axes": [
+    {
+      "id": "output",
+      "label": "Output",
+      "categories": [
+        { "id": "architecture", "label": "Architecture" },
+        { "id": "teaching", "label": "Teaching" },
+        { "id": "programming", "label": "Programming" }
+      ]
+    },
+    {
+      "id": "subject",
+      "label": "Subject",
+      "categories": [
+        { "id": "ai", "label": "Generative AI" },
+        { "id": "parametric", "label": "Parametric design" },
+        { "id": "imageprocessing", "label": "Image processing" },
+        { "id": "web", "label": "WebApps" },
+        { "id": "interoperability", "label": "Interoperability" }
+      ]
+    },
+    {
+      "id": "language",
+      "label": "Language",
+      "categories": [
+        { "id": "grasshopper", "label": "Grasshopper" },
+        { "id": "python", "label": "Python" },
+        { "id": "javascript", "label": "JavaScript" }
+      ]
+    }
+  ]
+}

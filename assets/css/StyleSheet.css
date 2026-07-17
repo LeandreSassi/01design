@@ -126,13 +126,6 @@ iframe {
     cursor: pointer;
 }
 
-
-
-
-
-
-
-
 header {
 
     position: sticky;
@@ -170,7 +163,6 @@ img {
     justify-content: space-between;
     align-items: baseline;
     align-content: stretch;
-    
 }
 
 .wrapper img {
