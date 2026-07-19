@@ -4,6 +4,8 @@ import { createLighting } from './core/Lighting.js';
 import { Taxonomy } from './data/Taxonomy.js';
 import { ProjectRepository } from './data/ProjectRepository.js';
 import { MatrixLayout } from './matrix/MatrixLayout.js';
+import { LaneAssignment } from './matrix/LaneAssignment.js';
+import { laneSlot } from './matrix/LaneLayout.js';
 import { MaterialLibrary } from './materials/MaterialLibrary.js';
 import { ProjectObjectFactory } from './objects/ProjectObject.js';
 import { RowLabelFactory } from './objects/RowLabels.js';
@@ -13,6 +15,7 @@ import { RowVisibility } from './interaction/RowVisibility.js';
 import { Picker } from './interaction/Picker.js';
 import { HoverPreview } from './ui/HoverPreview.js';
 import { ProjectModal } from './ui/ProjectModal.js';
+import { ScaleControl } from './ui/ScaleControl.js';
 import { MATRIX } from './config.js';
 
 async function main() {
@@ -41,16 +44,22 @@ function build(viewport, materials, taxonomy, repo) {
     const coordKeys = ['ix', 'iy', 'iz'];
     const categoryColors = materials.colorsFor(colorAxis);
 
+    // Every project renders at full size; overlap between different
+    // projects is expected. Lanes just give projects sharing a cell a small
+    // distinct nudge so they read as separate volumes rather than one
+    // coincident blob — see matrix/LaneAssignment.js and LaneLayout.js.
+    const allEntries = [...repo.cells.values()].flat();
+    const laneEntries = allEntries.map(e => ({ id: e.project.id, members: e.members }));
+    const lanes = new LaneAssignment(laneEntries);
+
     const projectMeshes = [];
-    repo.cells.forEach(entries => {
-        const offsets = MatrixLayout.subOffsets(entries.length, MATRIX.spacing);
-        const scale = entries.length > 1 ? 0.48 : 1;
-        entries.forEach((entry, j) => {
-            const color = categoryColors[entry[coordKeys[colorDim]]];
-            const mesh = objectFactory.create(entry, color, offsets[j], scale);
-            viewport.add(mesh);
-            projectMeshes.push(mesh);
-        });
+    allEntries.forEach(entry => {
+        const color = categoryColors[entry[coordKeys[colorDim]]];
+        const { rank, count } = lanes.slotOf(entry.project.id);
+        const lane = laneSlot(rank, count);
+        const mesh = objectFactory.create(entry, color, lane);
+        viewport.add(mesh);
+        projectMeshes.push(mesh);
     });
 
     const extent = layout.extent(MATRIX.border);
@@ -75,6 +84,8 @@ function build(viewport, materials, taxonomy, repo) {
 
     const rowVisibility = new RowVisibility(taxonomy.dims, projectMeshes, labelMeshes);
     document.getElementById('reset-rows').addEventListener('click', () => rowVisibility.resetAll());
+
+    const scaleControl = new ScaleControl(document.getElementById('topbar'));
 
     const picker = new Picker(viewport.camera);
     const preview = new HoverPreview({
@@ -101,6 +112,7 @@ function build(viewport, materials, taxonomy, repo) {
             else preview.hide();
         }
         projectMeshes.forEach(mesh => {
+            mesh.userData.baseScale = scaleControl.value;
             DropPhysics.step(mesh);
             DropPhysics.stepScale(mesh, mesh === hovered);
         });

@@ -25,13 +25,4 @@ export class MatrixLayout {
     extent(border = 0) {
         return this.dims.map(n => (n - 1) * this.spacing + this.cubeSize + border);
     }
-
-    /** Sub-cell offsets (2D, in the cell's local x/z) when several projects share one cell. */
-    static subOffsets(count, spacing) {
-        const q = spacing * 0.25;
-        if (count <= 1) return [[0, 0]];
-        if (count === 2) return [[-q, 0], [q, 0]];
-        if (count === 3) return [[-q, -q], [q, -q], [0, q]];
-        return [[-q, -q], [q, -q], [-q, q], [q, q]];
-    }
 }

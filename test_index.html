@@ -18,6 +18,12 @@
         #title-badge { font-weight: 700; font-size: 22px; letter-spacing: 0.02em; flex: none; }
         #topbar .filter-btn { margin: 2px; padding: 6px 12px; font-size: 14px; }
 
+        #scale-control {
+            display: flex; align-items: center; gap: 8px; flex: none;
+            font-size: 13px; letter-spacing: 0.02em; margin-left: auto;
+        }
+        #scale-control input[type="range"] { width: 140px; accent-color: var(--color-text); }
+
         #hint {
             position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
             font-size: 13px; letter-spacing: 0.04em; opacity: 0.65;
@@ -86,6 +92,10 @@
     }
     </script>
 
-    <script type="module" src="assets/js/3d/main.js"></script>
+    <script type="module">
+        // Cache-bust every load — during active dev, a stale cached ES module
+        // graph is a much more confusing bug than a wasted network request.
+        import('./assets/js/3d/main.js?v=' + Date.now());
+    </script>
 </body>
 </html>

@@ -2,11 +2,18 @@ import * as THREE from 'three';
 import { BoxSpecBuilder } from '../geometry/BoxSpecBuilder.js';
 import { buildSolidGeometry } from '../geometry/SolidGeometry.js';
 import { buildOutlineGeometry } from '../geometry/OutlineGeometry.js';
+import { applyOffset } from '../matrix/LaneLayout.js';
 import { MATRIX, APPEARANCE } from '../config.js';
 
-// Object creation: takes a resolved cell entry + layout + materials, and
-// produces the actual THREE.Mesh for a project. This is the only place that
-// wires geometry (pure math) to a material (visual) inside a scene object.
+// Object creation: takes a resolved cell entry + layout + materials + this
+// project's lane offset, and produces the actual THREE.Mesh. This is the
+// only place that wires geometry (pure math) to a material (visual) inside
+// a scene object.
+//
+// Every project builds at full MATRIX size — overlap between different
+// projects is expected and fine (see ui/ScaleControl.js for the slider that
+// controls how much they fuse). The lane offset just keeps projects sharing
+// a cell visually distinct rather than perfectly coincident.
 export class ProjectObjectFactory {
     constructor(layout, materials) {
         this.layout = layout;
@@ -22,33 +29,32 @@ export class ProjectObjectFactory {
     /**
      * @param {object} entry  { project, ix, iy, iz, members }
      * @param {THREE.Color} color  base color for this project (already resolved)
-     * @param {[number, number]} cellOffsetXZ  sub-cell offset when a cell is shared
-     * @param {number} scale  base scale (shrunk when several projects share a cell)
+     * @param {{offset:number[]}} lane  this project's small (dx, dy, dz) spread nudge
      */
-    create(entry, color, cellOffsetXZ, scale) {
+    create(entry, color, lane) {
         const { project, ix, iy, iz, members } = entry;
-        const specs = this.specBuilder.build([ix, iy, iz], members);
+        const specs = applyOffset(this.specBuilder.build([ix, iy, iz], members), lane.offset);
 
         const geometry = buildSolidGeometry(specs);
         const material = this.materials.cubeMaterial(color);
         const mesh = new THREE.Mesh(geometry, material);
 
-        const [hx, hy, hz] = this.layout.cellPosition(ix, iy, iz);
-        const home = new THREE.Vector3(hx + cellOffsetXZ[0], hy, hz + cellOffsetXZ[1]);
+        const home = new THREE.Vector3(...this.layout.cellPosition(ix, iy, iz));
         mesh.position.copy(home);
-        mesh.scale.setScalar(scale);
 
-        mesh.add(new THREE.LineSegments(
-            buildOutlineGeometry(specs, APPEARANCE.outlineEps),
-            this.materials.edgeMaterial()
-        ));
+        if (APPEARANCE.showProjectEdges) {
+            mesh.add(new THREE.LineSegments(
+                buildOutlineGeometry(geometry),
+                this.materials.edgeMaterial()
+            ));
+        }
 
         mesh.userData = {
             kind: 'cube',
             id: project.id, title: project.title, thumb: project.thumb,
             home, ix, iy, iz, members,
             vy: 0, vx: 0, vz: 0, wx: 0, wz: 0,
-            state: 'home', baseScale: scale, scale
+            state: 'home', baseScale: 1, scale: 1
         };
         return mesh;
     }

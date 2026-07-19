@@ -15,7 +15,7 @@
     "id": "glitchGAN",
     "title": "Generative AI (Python): audioreactive glitchGAN",
     "thumb": "assets/projects/GlitchGAN/cover.png",
-    "categories": ["ai", "python", "imageprocessing", "interoperability", "programming"]
+    "categories": ["ai", "python", "interoperability", "programming", "teaching"]
   },
   {
     "id": "midjourney",
