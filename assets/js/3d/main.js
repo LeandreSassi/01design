@@ -22,17 +22,18 @@ async function main() {
     const theme = readTheme();
     const canvas = document.getElementById('scene');
     const viewport = new Viewport(canvas, { background: theme.bg });
-    viewport.add(createLighting());
+    const lighting = createLighting();
+    viewport.add(lighting);
 
     const materials = new MaterialLibrary(theme);
 
     const taxonomy = await Taxonomy.load();
     const repo = await ProjectRepository.load(taxonomy);
 
-    build(viewport, materials, taxonomy, repo);
+    build(viewport, materials, taxonomy, repo, lighting);
 }
 
-function build(viewport, materials, taxonomy, repo) {
+function build(viewport, materials, taxonomy, repo, lighting) {
     const layout = new MatrixLayout(taxonomy.dims, MATRIX.spacing, MATRIX.cubeSize);
     const objectFactory = new ProjectObjectFactory(layout, materials);
     const labelFactory = new RowLabelFactory(materials, materials.theme.text);
@@ -96,12 +97,30 @@ function build(viewport, materials, taxonomy, repo) {
     });
     const modal = new ProjectModal(document.getElementById('scene-modal-root'));
 
+    // Dev mode (?dev=1): a material-editing lab bolted onto this same real
+    // scene/lighting/project meshes — no separate cloned scene to keep in
+    // sync. Lazily imported so regular visitors never load it. While active,
+    // clicking a cube selects it for editing instead of opening its modal.
+    let materialLab = null;
+    if (new URLSearchParams(location.search).get('dev') === '1') {
+        import('./dev/MaterialLab.js').then(({ initMaterialLab }) => initMaterialLab({
+            viewport,
+            ambientLight: lighting.children.find(c => c.isAmbientLight),
+            sunLight: lighting.children.find(c => c.isDirectionalLight),
+            meshes: projectMeshes
+        })).then(lab => { materialLab = lab; });
+    }
+
     window.addEventListener('pointermove', e => picker.setPointerFromEvent(e));
     viewport.canvas.addEventListener('click', () => {
         const h = picker.hovered;
         if (!h) return;
-        if (h.userData.kind === 'cube') modal.open(h.userData.id);
-        else rowVisibility.toggle(h.userData.axis, h.userData.index);
+        if (h.userData.kind === 'cube') {
+            if (materialLab) materialLab.select(h);
+            else modal.open(h.userData.id);
+        } else {
+            rowVisibility.toggle(h.userData.axis, h.userData.index);
+        }
     });
 
     viewport.onFrame(() => {
