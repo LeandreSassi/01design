@@ -1,10 +1,6 @@
 import * as THREE from 'three';
 import { GUI } from 'lil-gui';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { Viewport } from './core/Viewport.js';
 
 // Six overlapping volumes, each with its own independently tweakable
@@ -27,6 +23,122 @@ const SIDE = {
 // frosted-glass/orange-peel surface feel. See createNoiseNormalTexture().
 const NORMAL_MAP = createNoiseNormalTexture();
 
+// --- Water, based on https://github.com/matsuoka-601/waterball ---
+// That project is a WebGPU MLS-MPM fluid sim with screen-space fluid
+// rendering; only its *shading* model transfers to a static mesh. Its three
+// ingredients — Beer's-law absorption tinting the refracted background,
+// fresnel reflection, sharp specular — all exist natively in
+// MeshPhysicalMaterial: transmission gives REAL refraction of the scene
+// behind the mesh (you see the other volumes through the water),
+// attenuationColor/attenuationDistance IS Beer's law, and fresnel/specular
+// come with the PBR model. A first attempt as a bespoke ShaderMaterial
+// looked like flat blue plastic — static, opaque, analytic-sky-only — so
+// this uses the physical material plus an animated wave normal map (the
+// motion is what makes it read as liquid; see the onFrame hook in main()).
+function createWaterNormalTexture(size = 256) {
+    // Smooth value-noise heightfield -> tangent-space normal map. The
+    // random-per-pixel NORMAL_MAP used for glass is far too high-frequency
+    // for water; waves need smooth rolling blobs.
+    const grid = 8, cell = size / grid;
+    const lattice = [];
+    for (let y = 0; y <= grid; y++) {
+        lattice.push([]);
+        for (let x = 0; x <= grid; x++) lattice[y].push(Math.random());
+    }
+    const smooth = t => t * t * (3 - 2 * t);
+    const heightAt = (px, py) => {
+        const gx = Math.floor(px / cell), gy = Math.floor(py / cell);
+        const fx = smooth((px % cell) / cell), fy = smooth((py % cell) / cell);
+        const h00 = lattice[gy][gx], h10 = lattice[gy][gx + 1];
+        const h01 = lattice[gy + 1][gx], h11 = lattice[gy + 1][gx + 1];
+        return (h00 * (1 - fx) + h10 * fx) * (1 - fy) + (h01 * (1 - fx) + h11 * fx) * fy;
+    };
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const image = ctx.createImageData(size, size);
+    const bump = 6; // height-difference amplification into normal xy
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const dx = (heightAt((x + 1) % size, y) - heightAt(x, y)) * bump;
+            const dy = (heightAt(x, (y + 1) % size) - heightAt(x, y)) * bump;
+            const inv = 1 / Math.sqrt(dx * dx + dy * dy + 1);
+            const i = (y * size + x) * 4;
+            image.data[i] = (-dx * inv * 0.5 + 0.5) * 255;
+            image.data[i + 1] = (-dy * inv * 0.5 + 0.5) * 255;
+            image.data[i + 2] = (inv * 0.5 + 0.5) * 255;
+            image.data[i + 3] = 255;
+        }
+    }
+    ctx.putImageData(image, 0, 0);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(2, 2);
+    return texture;
+}
+
+function createWaterMaterial() {
+    // Per-material texture instance: offset is animated per volume in
+    // main()'s onFrame, so water volumes can't share one texture object.
+    const waveMap = createWaterNormalTexture();
+    const material = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,           // near-clear surface; the tint comes from absorption
+        roughness: 0.05,
+        metalness: 0,
+        transmission: 1,           // real see-through refraction of the scene
+        ior: 1.33,                 // water
+        thickness: 1.5,
+        attenuationColor: new THREE.Color(0x1fa9c9), // Beer's-law tint
+        attenuationDistance: 0.5,  // how quickly light turns teal inside the volume
+        normalMap: waveMap,
+        normalScale: new THREE.Vector2(0.6, 0.6)
+    });
+    material.userData.isWater = true;
+    material.userData.waveSpeed = 0.06;
+    material.userData.hoverRadius = 2.5;
+    material.userData.hoverStrength = 0.8;
+
+    // Hover ripple: rings radiating outward from the cursor's hit point,
+    // continuously animated by the same clock as the wave scroll while
+    // hovering, gone instantly otherwise. Injected into objectNormal (object
+    // space, pre-normalMatrix) so it combines correctly with the rest of the
+    // normal pipeline — including the tangent-space wave normalMap, which is
+    // applied later in the fragment shader.
+    material.onBeforeCompile = shader => {
+        shader.uniforms.uHoverPoint = { value: new THREE.Vector3(0, -9999, 0) };
+        shader.uniforms.uRippleTime = { value: 0 };
+        shader.uniforms.uRippleActive = { value: 0 };
+        shader.uniforms.uRippleRadius = { value: material.userData.hoverRadius };
+        shader.uniforms.uRippleStrength = { value: material.userData.hoverStrength };
+
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <common>',
+            `#include <common>
+            uniform vec3 uHoverPoint;
+            uniform float uRippleTime;
+            uniform float uRippleActive;
+            uniform float uRippleRadius;
+            uniform float uRippleStrength;`
+        );
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <beginnormal_vertex>',
+            `#include <beginnormal_vertex>
+            {
+                vec2 delta = position.xz - uHoverPoint.xz;
+                float dist = length(delta);
+                float envelope = exp(-dist * (3.0 / max(uRippleRadius, 0.001)));
+                float ripple = sin(dist * 14.0 - uRippleTime * 9.0) * envelope * uRippleActive;
+                vec2 dir = dist > 0.0001 ? delta / dist : vec2(1.0, 0.0);
+                objectNormal.xz += dir * ripple * uRippleStrength;
+                objectNormal = normalize(objectNormal);
+            }`
+        );
+        material.userData.shader = shader;
+    };
+    return material;
+}
+
 const MATERIAL_TYPES = {
     MeshStandardMaterial: color => new THREE.MeshStandardMaterial({ color }),
     MeshPhysicalMaterial: color => new THREE.MeshPhysicalMaterial({ color, clearcoat: 1, clearcoatRoughness: 0.1 }),
@@ -43,7 +155,13 @@ const MATERIAL_TYPES = {
     // Not a real three.js class — this is the underlying surface a volume
     // sits on when grass is grown on it (see createGrassMesh() below), based
     // on the instancing technique from https://github.com/FeliDipi/Grass
-    FurGrassMaterial: color => new THREE.MeshStandardMaterial({ color, roughness: 1 })
+    FurGrassMaterial: color => new THREE.MeshStandardMaterial({ color, roughness: 1 }),
+    // Not a real three.js class — see createWaterMaterial() above.
+    // Ignores the incoming color on purpose — unlike the other presets,
+    // "water tinted whatever the last material happened to be" doesn't read
+    // as water. Always starts at the same blue/teal; change uWaterColor in
+    // the GUI afterward if you want a different tint.
+    MeshWaterMaterial: () => createWaterMaterial()
 };
 
 // A plain bright gradient "sky" to bake into an env map — deliberately has
@@ -219,9 +337,11 @@ function sampleSurfacePoints(geometry, count) {
 }
 
 const BLADE_GEOMETRY = (() => {
+    // Thin sliver, not a wide paddle — width is a small fraction of the
+    // (unit) height so it reads as a grass blade rather than a spike.
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute([
-        -0.03, 0, 0, 0.03, 0, 0, 0, 1, 0
+        -0.008, 0, 0, 0.008, 0, 0, 0, 1, 0
     ], 3));
     return geometry;
 })();
@@ -310,10 +430,173 @@ function updateGrass(volume) {
         volume.grass = null;
     }
     if (volume.materialTypeName === 'FurGrassMaterial') {
+        // Underlying surface matches the blade base color, so any of it
+        // peeking through at the edges/gaps reads as more grass, not a
+        // mismatched patch of skin color underneath.
+        volume.mesh.material.color.set(volume.grassOptions.colorBottom);
         const points = sampleSurfacePoints(volume.mesh.geometry, volume.grassOptions.density);
         volume.grass = createGrassMesh(points, volume.grassOptions);
         volume.mesh.add(volume.grass);
     }
+}
+
+// --- Generic instanced-particle system ---
+// One InstancedMesh + a fixed pool of {position, velocity, life} slots,
+// config-driven so the same engine can back very different effects: water
+// droplets today, sand grains or other "wobbly interactive" particles later.
+// Nothing here is water-specific — that lives in createWaterSplash() below,
+// which is just one *preset* built on top of this.
+//
+// config:
+//   geometry, material   three.js instances, shared across the pool
+//   poolSize             instance count
+//   gravity, drag        per-second acceleration / velocity damping (0 = none)
+//   orient               'velocity' (rotates to face direction of travel,
+//                         e.g. droplets) or 'fixed' (orientation set once at
+//                         spawn from the `direction` param, e.g. a flat decal
+//                         oriented to a surface normal)
+//   stretch              elongate scale along the travel direction in
+//                         proportion to current speed (streaky, watery look)
+//   sizeCurve(t)          t goes from 1 (birth) to 0 (death); returns a scale
+//                         multiplier. Lets a preset shrink-to-nothing
+//                         (droplets), grow-then-collapse (a splash ring),
+//                         stay constant then cut off (sand), etc.
+function createParticleSystem(viewport, config) {
+    const { geometry, material, poolSize, gravity = 0, drag = 0, orient = 'velocity', stretch = false, sizeCurve = t => t } = config;
+
+    const mesh = new THREE.InstancedMesh(geometry, material, poolSize);
+    mesh.frustumCulled = false;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    viewport.add(mesh);
+
+    const particles = Array.from({ length: poolSize }, () => ({
+        position: new THREE.Vector3(),
+        velocity: new THREE.Vector3(),
+        orientation: new THREE.Quaternion(),
+        life: 0, maxLife: 1, baseSize: 1
+    }));
+    let nextIndex = 0;
+    const matrix = new THREE.Matrix4();
+    const scaleVec = new THREE.Vector3();
+    const travelDir = new THREE.Vector3();
+    const UP = new THREE.Vector3(0, 1, 0);
+
+    // direction: initial velocity axis ('velocity' orient) or the fixed
+    // orientation axis to align +Y to ('fixed' orient, e.g. a surface normal).
+    function spawn(origin, direction, color, count, opts = {}) {
+        const {
+            speedMin = 0.6, speedMax = 1.4, spread = 1.2, upBoost = 1.2,
+            lifeMin = 0.4, lifeMax = 0.9, sizeMin = 0.02, sizeMax = 0.05
+        } = opts;
+
+        for (let n = 0; n < count; n++) {
+            const idx = nextIndex;
+            nextIndex = (nextIndex + 1) % poolSize;
+            const p = particles[idx];
+
+            p.position.copy(origin);
+            if (orient === 'fixed') {
+                p.velocity.set(0, 0, 0);
+                p.orientation.setFromUnitVectors(UP, direction);
+            } else {
+                p.velocity.copy(direction).multiplyScalar(speedMin + Math.random() * (speedMax - speedMin));
+                p.velocity.x += (Math.random() - 0.5) * spread;
+                p.velocity.y += upBoost * Math.random();
+                p.velocity.z += (Math.random() - 0.5) * spread;
+            }
+
+            p.maxLife = lifeMin + Math.random() * (lifeMax - lifeMin);
+            p.life = p.maxLife;
+            p.baseSize = sizeMin + Math.random() * (sizeMax - sizeMin);
+            mesh.setColorAt(idx, color);
+        }
+        mesh.instanceColor.needsUpdate = true;
+    }
+
+    function update(dt) {
+        for (let i = 0; i < poolSize; i++) {
+            const p = particles[i];
+            if (p.life > 0) {
+                p.life -= dt;
+                if (gravity) p.velocity.y -= gravity * dt;
+                if (drag) p.velocity.multiplyScalar(Math.max(0, 1 - drag * dt));
+                p.position.addScaledVector(p.velocity, dt);
+            }
+
+            const t = p.life > 0 ? p.life / p.maxLife : 0;
+            const s = p.life > 0 ? p.baseSize * sizeCurve(t) : 0;
+
+            if (orient === 'velocity' && p.velocity.lengthSq() > 1e-6) {
+                travelDir.copy(p.velocity).normalize();
+                p.orientation.setFromUnitVectors(UP, travelDir);
+            }
+
+            if (stretch) {
+                const speed = p.velocity.length();
+                const elongation = THREE.MathUtils.clamp(1 + speed * 0.35, 1, 3.5);
+                scaleVec.set(s, s * elongation, s);
+            } else {
+                scaleVec.set(s, s, s);
+            }
+
+            matrix.compose(p.position, p.orientation, scaleVec);
+            mesh.setMatrixAt(i, matrix);
+        }
+        mesh.instanceMatrix.needsUpdate = true;
+    }
+
+    return { mesh, spawn, update };
+}
+
+// --- Water splash preset ---
+// Two particle systems built on the generic engine above: real transmissive
+// droplets that streak along their velocity (rounding out as they slow, like
+// actual water rather than bouncy balls), plus a flat "crown" ring that
+// pops out from the impact point and collapses — the classic splash
+// silhouette. Not a fluid sim, just enough of the right *shapes* of motion.
+function createWaterSplash(viewport) {
+    const dropletGeometry = new THREE.IcosahedronGeometry(1, 1); // a bit smoother than a raw icosahedron facets nicely with transmission
+    const dropletMaterial = new THREE.MeshPhysicalMaterial({
+        vertexColors: true, roughness: 0.05, metalness: 0,
+        transmission: 0.9, thickness: 0.3, ior: 1.33,
+        transparent: true
+    });
+    const droplets = createParticleSystem(viewport, {
+        geometry: dropletGeometry, material: dropletMaterial, poolSize: 200,
+        gravity: 5, drag: 0.4, orient: 'velocity', stretch: true,
+        sizeCurve: t => t // shrink linearly to nothing
+    });
+
+    const ringGeometry = new THREE.RingGeometry(0.7, 1, 32);
+    const ringMaterial = new THREE.MeshBasicMaterial({
+        vertexColors: true, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false
+    });
+    const rings = createParticleSystem(viewport, {
+        geometry: ringGeometry, material: ringMaterial, poolSize: 12,
+        gravity: 0, drag: 0, orient: 'fixed', stretch: false,
+        // pop out fast, then collapse — reads as an expanding ring that
+        // dissipates rather than a disc that just shrinks uniformly.
+        sizeCurve: t => t < 0.7 ? THREE.MathUtils.lerp(0.2, 1, 1 - t / 0.7) : THREE.MathUtils.lerp(1, 0, (t - 0.7) / 0.3)
+    });
+
+    function spawn(origin, normal, color, big) {
+        droplets.spawn(origin, normal, color, big ? 45 : 4, {
+            speedMin: big ? 1.4 : 0.5, speedMax: big ? 3.2 : 1.1,
+            spread: big ? 2.2 : 0.8, upBoost: big ? 2.4 : 0.9,
+            lifeMin: 0.3, lifeMax: big ? 0.8 : 0.5,
+            sizeMin: 0.012, sizeMax: big ? 0.035 : 0.022
+        });
+        if (big) {
+            rings.spawn(origin, normal, color, 1, { lifeMin: 0.35, lifeMax: 0.35, sizeMin: 0.9, sizeMax: 0.9 });
+        }
+    }
+
+    function update(dt) {
+        droplets.update(dt);
+        rings.update(dt);
+    }
+
+    return { spawn, update };
 }
 
 // Boxes, a rectangle, rounded shapes and a torus, positioned to overlap into one blob.
@@ -325,6 +608,14 @@ const VOLUMES = [
     { name: 'Capsule', geometry: new THREE.CapsuleGeometry(0.5, 0.8, 4, 8), position: [0.4, 1.0, 0.2], color: 0xb06fe0 },
     { name: 'Torus', geometry: new THREE.TorusGeometry(0.7, 0.28, 16, 48), position: [-0.4, -0.3, 1.0], color: 0xe04f7a }
 ];
+
+// Which color to carry over when switching material type. Water's .color is
+// white (its visible tint is the Beer's-law attenuationColor), so use that
+// tint instead when leaving water for another material class.
+function getMaterialColor(material) {
+    if (material.userData && material.userData.isWater) return material.attenuationColor;
+    return material.color || new THREE.Color(0xffffff);
+}
 
 function handleColorChange(color) {
     return value => color.setHex(value);
@@ -409,7 +700,7 @@ function main() {
         return {
             name: v.name, mesh, marker, materialTypeName: 'MeshStandardMaterial', grass: null,
             grassOptions: {
-                density: 1500, bladeHeight: 0.12, windStrength: 0.6,
+                density: 8000, bladeHeight: 0.12, windStrength: 0.6,
                 colorBottom: '#1e3a1e', colorTop: '#6fbf73',
                 combAngle: 0, directionJitter: 0.3,
                 hoverRadius: 0.6, hoverStrength: 1.2
@@ -428,7 +719,7 @@ function main() {
         if (!selected) return;
         const old = selected.mesh.material;
         selected.materialTypeName = name;
-        selected.mesh.material = MATERIAL_TYPES[name](old.color.clone());
+        selected.mesh.material = MATERIAL_TYPES[name](getMaterialColor(old).clone());
         old.dispose();
         updateGrass(selected);
         rebuildMaterialFolders(selected);
@@ -441,7 +732,11 @@ function main() {
     function rebuildMaterialFolders(volume) {
         if (materialFolder) materialFolder.destroy();
         if (specificFolder) specificFolder.destroy();
-        materialFolder = guiMaterialBase(gui, volume.mesh.material);
+        // For grass, this base folder only touches the dirt surface under
+        // the blades — say so, since the blades (what you actually see) are
+        // a separate mesh/material these controls don't reach.
+        const label = volume.materialTypeName === 'FurGrassMaterial' ? 'THREE.Material (surface only, not blades)' : 'THREE.Material';
+        materialFolder = guiMaterialBase(gui, volume.mesh.material, label);
         specificFolder = guiMaterialSpecific(gui, volume.mesh.material, volume.materialTypeName, volume);
     }
 
@@ -467,6 +762,9 @@ function main() {
     }
     select(volumes[0]);
 
+    const waterSplash = createWaterSplash(viewport);
+    let lastTrickleTime = 0;
+
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     canvas.addEventListener('click', e => {
@@ -475,12 +773,17 @@ function main() {
         raycaster.setFromCamera(pointer, viewport.camera);
         const hit = raycaster.intersectObjects(volumes.map(v => v.mesh))[0];
         if (!hit) return;
+
+        if (hit.object.material.userData.isWater) {
+            const worldNormal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+            waterSplash.spawn(hit.point, worldNormal, hit.object.material.attenuationColor, true);
+        }
         select(volumes.find(v => v.mesh === hit.object));
     });
 
-    // Fur/grass "push away from cursor" reactivity — raycast against
-    // whichever volumes currently have grass, and feed the local-space hit
-    // point to that volume's shader (uHoverActive on/off, others get 0).
+    // Fur/grass "push away from cursor" and water "ripple from cursor"
+    // reactivity — raycast against whichever volumes currently have grass
+    // or a water material, and feed each its own local-space hit point.
     const hoverLocalPoint = new THREE.Vector3();
     canvas.addEventListener('pointermove', e => {
         pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -488,89 +791,72 @@ function main() {
         raycaster.setFromCamera(pointer, viewport.camera);
 
         const grassVolumes = volumes.filter(v => v.grass);
-        if (!grassVolumes.length) return;
-        const hit = raycaster.intersectObjects(grassVolumes.map(v => v.mesh))[0];
+        if (grassVolumes.length) {
+            const hit = raycaster.intersectObjects(grassVolumes.map(v => v.mesh))[0];
+            grassVolumes.forEach(v => {
+                const uniforms = v.grass.material.uniforms;
+                if (hit && hit.object === v.mesh) {
+                    hoverLocalPoint.copy(hit.point);
+                    v.mesh.worldToLocal(hoverLocalPoint);
+                    uniforms.uHoverPoint.value.copy(hoverLocalPoint);
+                    uniforms.uHoverActive.value = 1;
+                } else {
+                    uniforms.uHoverActive.value = 0;
+                }
+            });
+        }
 
-        grassVolumes.forEach(v => {
-            const uniforms = v.grass.material.uniforms;
-            if (hit && hit.object === v.mesh) {
-                hoverLocalPoint.copy(hit.point);
-                v.mesh.worldToLocal(hoverLocalPoint);
-                uniforms.uHoverPoint.value.copy(hoverLocalPoint);
-                uniforms.uHoverActive.value = 1;
-            } else {
-                uniforms.uHoverActive.value = 0;
+        const waterVolumes = volumes.filter(v => v.mesh.material.userData.isWater && v.mesh.material.userData.shader);
+        if (waterVolumes.length) {
+            const hit = raycaster.intersectObjects(waterVolumes.map(v => v.mesh))[0];
+            waterVolumes.forEach(v => {
+                const uniforms = v.mesh.material.userData.shader.uniforms;
+                if (hit && hit.object === v.mesh) {
+                    hoverLocalPoint.copy(hit.point);
+                    v.mesh.worldToLocal(hoverLocalPoint);
+                    uniforms.uHoverPoint.value.copy(hoverLocalPoint);
+                    uniforms.uRippleActive.value = 1;
+                } else {
+                    uniforms.uRippleActive.value = 0;
+                }
+            });
+
+            // A light continuous trickle while hovering, on top of the
+            // bigger click burst — throttled so it's a handful of droplets,
+            // not a shower.
+            const now = performance.now();
+            if (hit && now - lastTrickleTime > 90) {
+                lastTrickleTime = now;
+                const worldNormal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+                waterSplash.spawn(hit.point, worldNormal, hit.object.material.attenuationColor, false);
             }
-        });
+        }
     });
 
     window.addEventListener('keydown', e => {
         if (e.key === 'Escape') deselect();
     });
 
-    // SSAO gives contact/ambient shadowing between the overlapping volumes
-    // (and where they meet the ground) that the single directional light's
-    // cast shadow alone doesn't capture. Composer replaces the viewport's
-    // own render call, so we drive the loop here instead of viewport.start().
-    const composer = new EffectComposer(viewport.renderer);
-    composer.addPass(new RenderPass(viewport.scene, viewport.camera));
-    const ssaoPass = new SSAOPass(viewport.scene, viewport.camera, window.innerWidth, window.innerHeight);
-    ssaoPass.kernelRadius = 0.4;
-    ssaoPass.minDistance = 0.0005;
-    ssaoPass.maxDistance = 0.15;
-    composer.addPass(ssaoPass);
-
-    // Bloom, ported from the reference sandbox's Post Processing folder —
-    // mostly noticeable as a soft glow on bright specular highlights (glass
-    // clearcoat, metal) rather than the overall image.
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.35, 0.33, 0.85);
-    composer.addPass(bloomPass);
-
-    window.addEventListener('resize', () => {
-        composer.setSize(window.innerWidth, window.innerHeight);
-        bloomPass.resolution.set(window.innerWidth, window.innerHeight);
-    });
-    guiAmbientShadow(gui, ssaoPass);
-    guiPostProcessing(gui, bloomPass);
-
-    (function loop() {
-        requestAnimationFrame(loop);
-        viewport.controls.update();
+    let lastFrameTime = performance.now() / 1000;
+    viewport.onFrame(() => {
         const t = performance.now() / 1000;
-        volumes.forEach(v => { if (v.grass) v.grass.material.uniforms.uTime.value = t; });
-        composer.render();
-    })();
-}
+        const dt = Math.min(t - lastFrameTime, 0.1); // clamp so a stall doesn't fling particles
+        lastFrameTime = t;
 
-// --- "Ambient Shadow" folder: SSAO pass controls ---
-function guiAmbientShadow(gui, ssaoPass) {
-    const folder = gui.addFolder('Ambient Shadow');
-    const outputs = {
-        Default: SSAOPass.OUTPUT.Default,
-        'SSAO Only': SSAOPass.OUTPUT.SSAO,
-        'SSAO Only + Blur': SSAOPass.OUTPUT.Blur,
-        Beauty: SSAOPass.OUTPUT.Beauty,
-        Depth: SSAOPass.OUTPUT.Depth,
-        Normal: SSAOPass.OUTPUT.Normal
-    };
-    const data = { output: 'Default' };
-
-    folder.add(ssaoPass, 'enabled');
-    folder.add(ssaoPass, 'kernelRadius', 0, 2, 0.01);
-    folder.add(ssaoPass, 'minDistance', 0, 0.02, 0.0001);
-    folder.add(ssaoPass, 'maxDistance', 0, 1, 0.01);
-    folder.add(data, 'output', Object.keys(outputs)).onChange(name => { ssaoPass.output = outputs[name]; });
-    return folder;
-}
-
-// --- "Post Processing" folder: bloom, ported from the reference sandbox ---
-function guiPostProcessing(gui, bloomPass) {
-    const folder = gui.addFolder('Post Processing');
-    folder.add(bloomPass, 'enabled');
-    folder.add(bloomPass, 'threshold', 0, 1, 0.01);
-    folder.add(bloomPass, 'strength', 0, 5, 0.01);
-    folder.add(bloomPass, 'radius', 0, 1, 0.01);
-    return folder;
+        volumes.forEach(v => {
+            if (v.grass) v.grass.material.uniforms.uTime.value = t;
+            const m = v.mesh.material;
+            if (m.userData.isWater && m.normalMap) {
+                // Two incommensurate drift frequencies so the wave pattern
+                // never settles into an obvious straight-line scroll.
+                const s = m.userData.waveSpeed;
+                m.normalMap.offset.set(t * s + 0.3 * Math.sin(t * s * 4.7), t * s * 0.6 + 0.3 * Math.cos(t * s * 3.1));
+                if (m.userData.shader) m.userData.shader.uniforms.uRippleTime.value = t;
+            }
+        });
+        waterSplash.update(dt);
+    });
+    viewport.start();
 }
 
 // --- "Sun" folder: the shadow-casting directional light ---
@@ -618,14 +904,18 @@ function guiSceneFog(folder, scene) {
 }
 
 // --- base "THREE.Material" folder, same properties/order as the reference ---
-function guiMaterialBase(gui, material) {
-    const folder = gui.addFolder('THREE.Material');
+// alphaTest/alphaHash are deliberately not exposed: both only do anything
+// against a texture's alpha channel, and nothing in this sandbox ever loads
+// a texture map — they'd be dead sliders on every single material type.
+// `label` lets callers clarify when this only covers an underlying surface
+// rather than what's actually dominant on screen (e.g. FurGrassMaterial's
+// blades are a separate mesh/material entirely, untouched by this folder).
+function guiMaterialBase(gui, material, label = 'THREE.Material') {
+    const folder = gui.addFolder(label);
     folder.add(material, 'transparent').onChange(needsUpdate(material));
     folder.add(material, 'opacity', 0, 1).step(0.01);
     folder.add(material, 'depthTest');
     folder.add(material, 'depthWrite');
-    folder.add(material, 'alphaTest', 0, 1).step(0.01).onChange(needsUpdate(material));
-    folder.add(material, 'alphaHash').onChange(needsUpdate(material));
     folder.add(material, 'visible');
     folder.add(material, 'side', SIDE).onChange(needsUpdate(material));
     return folder;
@@ -637,21 +927,19 @@ function guiMaterialSpecific(gui, material, typeName, volume) {
     if (typeName === 'MeshGlassMaterial') return guiMeshGlassMaterial(gui, material);
     if (typeName === 'MeshPhysicalMaterial') return guiMeshPhysicalMaterial(gui, material);
     if (typeName === 'FurGrassMaterial') return guiFurGrassMaterial(gui, material, volume);
+    if (typeName === 'MeshWaterMaterial') return guiMeshWaterMaterial(gui, material);
     return guiMeshStandardMaterial(gui, material);
 }
 
-// Ported directly from the reference guiMeshStandardMaterial(); texture-map
-// dropdowns are kept for layout parity but only offer 'none' (no texture
-// assets loaded in this test rig).
+// Texture-map dropdowns (map/roughnessMap/alphaMap/metalnessMap/envMaps)
+// and vertexColors from the reference guiMeshStandardMaterial() are omitted
+// on purpose: this sandbox never loads a texture asset or sets a `color`
+// geometry attribute on any volume, so every one of those controls would be
+// a dead no-op regardless of which material type is selected.
 function guiMeshStandardMaterial(gui, material) {
     const data = {
         color: material.color.getHex(),
-        emissive: material.emissive.getHex(),
-        envMaps: 'none',
-        map: 'none',
-        roughnessMap: 'none',
-        alphaMap: 'none',
-        metalnessMap: 'none'
+        emissive: material.emissive.getHex()
     };
 
     const folder = gui.addFolder('THREE.MeshStandardMaterial');
@@ -662,13 +950,7 @@ function guiMeshStandardMaterial(gui, material) {
     folder.add(material, 'envMapIntensity', 0, 3, 0.01);
     folder.add(material, 'flatShading').onChange(needsUpdate(material));
     folder.add(material, 'wireframe').onChange(needsUpdate(material));
-    folder.add(material, 'vertexColors').onChange(needsUpdate(material));
     folder.add(material, 'fog').onChange(needsUpdate(material));
-    folder.add(data, 'envMaps', ['none']);
-    folder.add(data, 'map', ['none']);
-    folder.add(data, 'roughnessMap', ['none']);
-    folder.add(data, 'alphaMap', ['none']);
-    folder.add(data, 'metalnessMap', ['none']);
     return folder;
 }
 
@@ -708,6 +990,38 @@ function guiMeshGlassMaterial(gui, material) {
     return folder;
 }
 
+// MeshWaterMaterial folder — physical-material water (see
+// createWaterMaterial()). waterColor drives attenuationColor (Beer's-law
+// tint); depth is attenuationDistance inverted into an intuitive
+// "bigger = more tinted" slider; waveStrength/waveScale/waveSpeed drive the
+// animated normal map.
+function guiMeshWaterMaterial(gui, material) {
+    const folder = gui.addFolder('MeshWaterMaterial');
+    const data = {
+        waterColor: material.attenuationColor.getHex(),
+        depth: 1 / material.attenuationDistance,
+        waveStrength: material.normalScale.x,
+        waveScale: material.normalMap.repeat.x
+    };
+
+    folder.addColor(data, 'waterColor').onChange(handleColorChange(material.attenuationColor));
+    folder.add(data, 'depth', 0.2, 10, 0.1).onChange(v => { material.attenuationDistance = 1 / v; });
+    folder.add(material, 'roughness', 0, 1, 0.01);
+    folder.add(material, 'ior', 1, 2.333, 0.001);
+    folder.add(material, 'thickness', 0, 5, 0.01);
+    folder.add(material, 'transmission', 0, 1, 0.01);
+    folder.add(data, 'waveStrength', 0, 2, 0.01).onChange(v => material.normalScale.set(v, v));
+    folder.add(data, 'waveScale', 0.5, 8, 0.5).onChange(v => material.normalMap.repeat.set(v, v));
+    folder.add(material.userData, 'waveSpeed', 0, 0.5, 0.005);
+    folder.add(material.userData, 'hoverRadius', 0.2, 6, 0.1).name('rippleRadius').onChange(v => {
+        if (material.userData.shader) material.userData.shader.uniforms.uRippleRadius.value = v;
+    });
+    folder.add(material.userData, 'hoverStrength', 0, 3, 0.01).name('rippleStrength').onChange(v => {
+        if (material.userData.shader) material.userData.shader.uniforms.uRippleStrength.value = v;
+    });
+    return folder;
+}
+
 // Base MeshStandardMaterial folder (the surface underneath the blades) plus
 // a nested "Grass Blades" folder for the instanced grass mesh itself.
 // Nesting means rebuildMaterialFolders' single folder.destroy() call tears
@@ -718,13 +1032,14 @@ function guiFurGrassMaterial(gui, material, volume) {
 
     const opts = volume.grassOptions;
     const grassFolder = folder.addFolder('Grass Blades');
-    grassFolder.add(opts, 'density', 200, 6000, 100).onChange(() => updateGrass(volume));
+    grassFolder.add(opts, 'density', 200, 10000, 100).onChange(() => updateGrass(volume));
     grassFolder.add(opts, 'bladeHeight', 0.02, 0.4, 0.005).onChange(() => updateGrass(volume));
     grassFolder.add(opts, 'windStrength', 0, 3, 0.01).onChange(v => {
         if (volume.grass) volume.grass.material.uniforms.uWindStrength.value = v;
     });
     grassFolder.addColor(opts, 'colorBottom').onChange(v => {
         if (volume.grass) volume.grass.material.uniforms.uColorBottom.value.set(v);
+        material.color.set(v); // underlying surface stays matched to the blade base
     });
     grassFolder.addColor(opts, 'colorTop').onChange(v => {
         if (volume.grass) volume.grass.material.uniforms.uColorTop.value.set(v);
@@ -743,12 +1058,14 @@ function guiFurGrassMaterial(gui, material, volume) {
     return folder;
 }
 
+// gradientMap omitted — same reasoning as the standard-material texture
+// dropdowns above: no texture asset is ever loaded, so it'd be a dead
+// dropdown stuck on 'none' forever.
 function guiMeshToonMaterial(gui, material) {
-    const data = { color: material.color.getHex(), gradientMap: 'none' };
+    const data = { color: material.color.getHex() };
     const folder = gui.addFolder('THREE.MeshToonMaterial');
     folder.addColor(data, 'color').onChange(handleColorChange(material.color));
     folder.add(material, 'wireframe').onChange(needsUpdate(material));
-    folder.add(data, 'gradientMap', ['none']);
     return folder;
 }
 
