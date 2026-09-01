@@ -10,6 +10,7 @@ import { MaterialLibrary } from './materials/MaterialLibrary.js';
 import { ProjectObjectFactory } from './objects/ProjectObject.js';
 import { RowLabelFactory } from './objects/RowLabels.js';
 import { createMatrixBounds } from './objects/MatrixBounds.js';
+import { createGroundWater, updateWaterHover } from './objects/GroundWater.js';
 import { DropPhysics } from './animation/DropPhysics.js';
 import { RowVisibility } from './interaction/RowVisibility.js';
 import { Picker } from './interaction/Picker.js';
@@ -18,10 +19,15 @@ import { ProjectModal } from './ui/ProjectModal.js';
 import { ScaleControl } from './ui/ScaleControl.js';
 import { MATRIX } from './config.js';
 
+// A nice, non-harsh white for the 3D canvas — independent of the site's
+// teal --color-bg theme (Theme.js), which the surrounding page chrome
+// (topbar, buttons) keeps using.
+const SCENE_BG = '#F2EFE9';
+
 async function main() {
     const theme = readTheme();
     const canvas = document.getElementById('scene');
-    const viewport = new Viewport(canvas, { background: theme.bg });
+    const viewport = new Viewport(canvas, { background: SCENE_BG });
     const lighting = createLighting();
     viewport.add(lighting);
 
@@ -67,6 +73,15 @@ function build(viewport, materials, taxonomy, repo, lighting) {
     viewport.add(createMatrixBounds(extent, materials));
 
     const half = extent.map(e => e / 2);
+
+    // Calm reflective water standing in for a ground plane, sitting right
+    // under the matrix's bottom bound. Nudged down by zFightJitter — the X/Z
+    // row labels below sit flat at exactly -half[1] too, so without this the
+    // water plane is perfectly coplanar with them and z-fights.
+    const sun = lighting.children.find(c => c.isDirectionalLight);
+    const water = createGroundWater(sun.position.clone().normalize(), { y: -half[1] - MATRIX.zFightJitter });
+    viewport.add(water);
+
     const M = MATRIX.labelMargin;
     const labelPosition = [
         i => [layout.axisCoord(i, taxonomy.dims[0]), -half[1], half[2] + M],
@@ -123,8 +138,19 @@ function build(viewport, materials, taxonomy, repo, lighting) {
         }
     });
 
+    let lastFrameTime = performance.now() / 1000;
     viewport.onFrame(() => {
+        const t = performance.now() / 1000;
+        const dt = Math.min(t - lastFrameTime, 0.1);
+        lastFrameTime = t;
+
         const { hovered, changed } = picker.update(projectMeshes, labelMeshes);
+
+        // Same ray picker.update() just cast, re-tested against the water —
+        // a light ripple trail follows it, see GroundWater.js.
+        const waterHit = picker.raycaster.intersectObject(water)[0];
+        updateWaterHover(water, dt, waterHit ? { x: waterHit.point.x, z: waterHit.point.z } : null);
+
         if (changed) {
             if (hovered && hovered.userData.kind === 'cube') preview.showCube(hovered.userData);
             else if (hovered) preview.showLabel(hovered.userData);

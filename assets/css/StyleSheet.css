@@ -2,8 +2,8 @@
    Theme colors — change these two values to restyle the whole site.
    =========================================================================== */
 :root {
-    --color-text: #ECEDF2;
-    --color-bg: #126D71;
+    --color-text: #1f2024;
+    --color-bg: #97c8cb;
 }
 
 body, html {

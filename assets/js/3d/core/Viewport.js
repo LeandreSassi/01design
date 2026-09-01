@@ -23,9 +23,42 @@ export class Viewport {
         this.controls.minDistance = CAMERA.minDistance;
         this.controls.maxDistance = CAMERA.maxDistance;
 
+        // OrbitControls' own wheel zoom scales by |event.deltaY|, assuming
+        // ~100px per notch. Some browser/mouse combos (notably Chrome on
+        // Windows) report a far larger deltaY per notch than others (Edge),
+        // making a single scroll dolly all the way to min/max. Drive zoom
+        // ourselves off the *sign* of deltaY with a clamped magnitude, so one
+        // notch is always one bounded step regardless of what the browser
+        // reports — while still letting trackpads (small deltas) zoom smoothly.
+        this.controls.enableZoom = false;
+        this._initWheelZoom();
+
         this._tasks = [];
         this._resize();
         window.addEventListener('resize', () => this._resize());
+    }
+
+    // Cross-browser wheel zoom. Normalizes deltaY to a fraction of one notch
+    // (~100px), capped at 1, so a huge single event can't max out the zoom.
+    // Adjusts the camera's distance to the orbit target directly; OrbitControls
+    // re-derives its spherical state from the live camera position every
+    // update(), so this composes cleanly with orbit + damping.
+    _initWheelZoom() {
+        const offset = new THREE.Vector3();
+        this.canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            if (!this.controls.enabled) return;
+            const intensity = Math.min(Math.abs(e.deltaY) / 100, 1);
+            if (intensity === 0) return;
+            const factor = Math.pow(CAMERA.zoomStep, -Math.sign(e.deltaY) * intensity);
+
+            offset.copy(this.camera.position).sub(this.controls.target);
+            const distance = THREE.MathUtils.clamp(
+                offset.length() * factor, this.controls.minDistance, this.controls.maxDistance
+            );
+            offset.setLength(distance);
+            this.camera.position.copy(this.controls.target).add(offset);
+        }, { passive: false });
     }
 
     /** Register a per-frame callback. */

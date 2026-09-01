@@ -5,7 +5,8 @@ export const MATRIX = {
     connector: 0.24,     // thickness of a bridge slab (uncontested)
     bridgeBite: 0.02,    // bridge penetration into cubes (hides its end caps)
     border: 0.06,        // padding of the bounding wireframe
-    labelMargin: 1       // how far row labels sit outside the volume
+    labelMargin: 1,      // how far row labels sit outside the volume
+    zFightJitter: 0.02   // tiny nudge to break up coplanar faces that would otherwise z-fight (see ProjectObject.js and main.js's ground water)
 };
 
 // When several projects share a footprint cell, each gets a small distinct
@@ -57,5 +58,6 @@ export const CAMERA = {
     position: [11, 8, 13],
     minDistance: 6,
     maxDistance: 45,
-    dampingFactor: 0.08
+    dampingFactor: 0.08,
+    zoomStep: 0.9        // distance multiplier per full wheel notch — we drive zoom ourselves (see Viewport.js) so it's consistent across browsers, not tied to the browser's reported deltaY magnitude
 };

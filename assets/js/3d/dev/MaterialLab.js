@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GUI } from 'lil-gui';
+import { rebuildGeometry, defaultGeometryOptions, SURFACE_TYPE_NAMES } from './ParametricEngine.js';
 
 // Dev-only material lab: attaches a lil-gui material editor directly onto
 // the REAL running matrix (real scene, real lighting, real project meshes)
@@ -364,7 +365,7 @@ function createGrassMesh(points, options) {
 
 function defaultGrassOptions() {
     return {
-        density: 8000, bladeHeight: 0.12, windStrength: 0.6,
+        density: 50000, bladeHeight: 0.12, windStrength: 0.6,
         colorBottom: '#1e3a1e', colorTop: '#6fbf73',
         combAngle: 0, directionJitter: 0.3,
         hoverRadius: 0.6, hoverStrength: 1.2
@@ -640,10 +641,44 @@ function createSelectionMarker(geometry) {
     return marker;
 }
 
+// lil-gui doesn't truncate long controller/folder names by default — a
+// label like "Clear this project's autosave" just wraps inside the fixed
+// name column, and since that column's height stays single-line, the
+// wrapped second line overlaps the row below it ("text stacking wrong").
+// One-line ellipsis truncation instead; hover still shows the full text via
+// the browser's native title tooltip (set alongside).
+function injectTruncationStyles() {
+    if (document.getElementById('material-lab-style')) return;
+    const style = document.createElement('style');
+    style.id = 'material-lab-style';
+    style.textContent = `
+        .lil-gui .controller .name, .lil-gui .title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 export async function initMaterialLab({ viewport, ambientLight, sunLight, meshes }) {
+    injectTruncationStyles();
+    // Env map loaded from an image file (like the three.js material-browser
+    // example): an equirectangular image -> PMREM -> scene.environment. Swap
+    // the path below for any other equirectangular image and it just works.
+    // Async load, so materials pick it up on the first render after it resolves
+    // (scene.environment needs no per-material needsUpdate).
     const pmremGenerator = new THREE.PMREMGenerator(viewport.renderer);
-    viewport.scene.environment = pmremGenerator.fromScene(createEnvironmentScene(), 0.04).texture;
-    pmremGenerator.dispose();
+    new THREE.TextureLoader().load('assets/images/vertigogrphx-patterns.jpg', texture => {
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        texture.colorSpace = THREE.SRGBColorSpace;
+        // environment drives reflections ONLY — deliberately not set as
+        // scene.background, so the scene keeps its theme background colour
+        // (set in Viewport) and the env map shows only in reflective surfaces.
+        viewport.scene.environment = pmremGenerator.fromEquirectangular(texture).texture;
+        texture.dispose();
+        pmremGenerator.dispose();
+    });
 
     const gui = new GUI({ title: 'Material Lab' });
     const autosave = loadAutosave();
@@ -659,7 +694,7 @@ export async function initMaterialLab({ viewport, ambientLight, sunLight, meshes
         const entry = {
             id: mesh.userData.id, name: mesh.userData.title || mesh.userData.id || 'mesh',
             mesh, marker, materialTypeName: 'MeshStandardMaterial', grass: null,
-            grassOptions: defaultGrassOptions()
+            grassOptions: defaultGrassOptions(), geometryOptions: defaultGeometryOptions()
         };
         entries.set(mesh, entry);
 
@@ -673,7 +708,7 @@ export async function initMaterialLab({ viewport, ambientLight, sunLight, meshes
         const handler = PRESET_HANDLERS[type] || PRESET_HANDLERS.MeshStandardMaterial;
         const data = handler.capture(entry.mesh.material);
         if (type === 'FurGrassMaterial') data.grassOptions = { ...entry.grassOptions };
-        return { type, data };
+        return { type, data, geometryOptions: { ...entry.geometryOptions } };
     }
 
     function applyPreset(entry, preset) {
@@ -686,6 +721,14 @@ export async function initMaterialLab({ viewport, ambientLight, sunLight, meshes
         handler.apply(entry.mesh.material, preset.data);
         if (preset.type === 'FurGrassMaterial' && preset.data.grassOptions) {
             Object.assign(entry.grassOptions, preset.data.grassOptions);
+        }
+
+        // Geometry first, THEN grass — grass blades are sampled from the mesh
+        // surface, so they must be grown on the final (rounded/warped) shape,
+        // not the shape before rebuildGeometry morphs it.
+        if (preset.geometryOptions) {
+            Object.assign(entry.geometryOptions, preset.geometryOptions);
+            rebuildGeometry(entry);
         }
         updateGrass(entry);
     }
@@ -713,6 +756,7 @@ export async function initMaterialLab({ viewport, ambientLight, sunLight, meshes
     let selected = null;
     let materialFolder = null;
     let specificFolder = null;
+    let geometryFolder = null;
 
     const typeController = selectionFolder.add(typeProxy, 'type', Object.keys(MATERIAL_TYPES)).onChange(name => {
         if (!selected) return;
@@ -733,16 +777,55 @@ export async function initMaterialLab({ viewport, ambientLight, sunLight, meshes
         specificFolder = guiMaterialSpecific(gui, selected.mesh.material, selected.materialTypeName, selected, () => persist(selected));
     }
 
+    // Geometry — LEVEL 1 (overall shape). Regenerates the mesh from its stored
+    // box specs (see dev/ParametricEngine.js): cornerRadius goes sharp box ->
+    // rounded blob (single cubes AND fused massings), irregularity domain-warps
+    // the field for organic per-project diversity. (Per-mesh scale used to live
+    // here but did nothing — the drop-physics loop in main.js drives mesh.scale
+    // every frame; overall scaling is the top-bar slider's job.)
+    function rebuildGeometryFolder() {
+        if (geometryFolder) geometryFolder.destroy();
+        const opts = selected.geometryOptions;
+        geometryFolder = gui.addFolder('Geometry');
+        const hasSpecs = !!selected.mesh.userData.specs;
+        // Regrow grass after the geometry changes so blades re-sample the new
+        // surface instead of clinging to the shape's previous form. No-op for
+        // non-grass materials.
+        const rebuild = () => { rebuildGeometry(selected); updateGrass(selected); persist(selected); };
+        const cornerController = geometryFolder.add(opts, 'cornerRadius', 0, 0.8, 0.01).onChange(rebuild);
+        const irregularityController = geometryFolder.add(opts, 'irregularity', 0, 1, 0.01).onChange(rebuild);
+        // LEVEL 2 — surface texture: type (flat/rough/wobbly/porous) + strength.
+        // Surface rebuilds on a finer marching-cubes grid (~0.2-0.3s), so the
+        // amount slider fires on release (onFinishChange) to keep dragging smooth;
+        // the discrete type dropdown rebuilds immediately.
+        const surfaceTypeController = geometryFolder.add(opts, 'surfaceType', SURFACE_TYPE_NAMES).name('surface').onChange(rebuild);
+        const surfaceController = geometryFolder.add(opts, 'surface', 0, 1, 0.01).name('surface amount').onFinishChange(rebuild);
+        if (!hasSpecs) {
+            [cornerController, irregularityController, surfaceTypeController, surfaceController].forEach(c => c.disable());
+            cornerController.name('cornerRadius (no specs on this mesh)');
+        }
+    }
+
     function select(mesh) {
         const entry = entryFor(mesh);
         if (selected) selected.marker.visible = false;
         selected = entry;
         selected.marker.visible = true;
 
+        // Place the marker against the mesh's CURRENT position/geometry. The
+        // entry (and its marker) may have been created earlier — at init, or
+        // while the cube was still mid drop-in — so re-anchor it here rather
+        // than trusting where it sat when the entry was first made.
+        entry.mesh.geometry.computeBoundingSphere();
+        const bounds = entry.mesh.geometry.boundingSphere;
+        entry.marker.position.copy(entry.mesh.position).add(bounds.center);
+        entry.marker.position.y = entry.mesh.position.y + bounds.center.y + bounds.radius + 0.35;
+
         selectionFolder.title('Selected: ' + entry.name);
         typeProxy.type = entry.materialTypeName;
         typeController.updateDisplay();
         rebuildMaterialFolders();
+        rebuildGeometryFolder();
     }
 
     function deselect() {
@@ -752,6 +835,7 @@ export async function initMaterialLab({ viewport, ambientLight, sunLight, meshes
         selectionFolder.title('Selected: none');
         if (materialFolder) { materialFolder.destroy(); materialFolder = null; }
         if (specificFolder) { specificFolder.destroy(); specificFolder = null; }
+        if (geometryFolder) { geometryFolder.destroy(); geometryFolder = null; }
     }
 
     const autosaveFolder = gui.addFolder('Autosave');
@@ -759,7 +843,7 @@ export async function initMaterialLab({ viewport, ambientLight, sunLight, meshes
         if (!selected || !selected.id) return;
         delete autosave[selected.id];
         saveAutosave(autosave);
-    } }, 'clear').name('Clear this project\'s autosave');
+    } }, 'clear').name('Clear autosave');
     autosaveFolder.add({ export: () => {
         const blob = new Blob([JSON.stringify(autosave, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -857,7 +941,16 @@ export async function initMaterialLab({ viewport, ambientLight, sunLight, meshes
         select(mesh);
     }
 
-    if (meshes) meshes.forEach(m => void 0); // meshes are only wrapped lazily on first select; nothing to do eagerly
+    // Dev mode restores your saved edits up front, not only on click: apply
+    // each mesh's autosaved snapshot (material + grass + geometry) at init, so
+    // the scene matches what you last left it as on load. Only meshes that
+    // actually have a saved snapshot are wrapped here; the rest keep their
+    // default material and are wrapped lazily on first select, as before.
+    if (meshes) {
+        meshes.forEach(mesh => {
+            if (mesh.userData.id && autosave[mesh.userData.id]) entryFor(mesh);
+        });
+    }
 
     return { select: selectWithHit, deselect };
 }
@@ -962,7 +1055,7 @@ function guiFurGrassMaterial(gui, material, entry, persist) {
     folder.title('FurGrassMaterial (surface)');
     const opts = entry.grassOptions;
     const grassFolder = folder.addFolder('Grass Blades');
-    grassFolder.add(opts, 'density', 200, 10000, 100).onChange(() => { updateGrass(entry); persist(); });
+    grassFolder.add(opts, 'density', 200, 100000, 100).onChange(() => { updateGrass(entry); persist(); });
     grassFolder.add(opts, 'bladeHeight', 0.02, 0.4, 0.005).onChange(() => { updateGrass(entry); persist(); });
     grassFolder.add(opts, 'windStrength', 0, 3, 0.01).onChange(v => {
         if (entry.grass) entry.grass.material.uniforms.uWindStrength.value = v;
